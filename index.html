@@ -113,6 +113,39 @@ summary{cursor:pointer;font-size:14px;color:var(--muted)}
 .kv{display:grid;grid-template-columns:1fr auto;gap:4px 12px;font-size:14px}
 .kv b{font-variant-numeric:tabular-nums;text-align:right}
 .empty{color:var(--muted);font-size:14px}
+.viewbar{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px}
+.seg2{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:var(--field)}
+.seg2 button{border:0;background:transparent;padding:7px 14px;font-size:14px;color:var(--text)}
+.seg2 button[aria-pressed="true"]{background:var(--cover);color:#fff}
+.onlyphone{display:none}
+.lst{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--field)}
+.li{display:grid;grid-template-columns:auto 1fr auto;gap:2px 12px;padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer;align-items:baseline}
+.li:last-child{border-bottom:0}
+.li .d{font-weight:600;font-variant-numeric:tabular-nums}
+.li .a{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.li .t{font-weight:600;font-variant-numeric:tabular-nums;text-align:right}
+.li .s{grid-column:1/-1;font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.li.blank{cursor:default;background:var(--bg)}
+.li.blank .s{white-space:normal}
+.li.new{color:var(--ink);font-weight:500;justify-content:center;grid-template-columns:1fr;text-align:center}
+.ptot{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px 12px;font-size:13px;margin:10px 2px;color:var(--muted)}
+.ptot b{display:block;color:var(--text);font-size:15px;font-variant-numeric:tabular-nums}
+.pg-only-l .pg-r,.pg-only-r .pg-l{display:none}
+@media (max-width:760px){
+  .bar{padding:8px 10px;gap:8px}
+  .bar h1{font-size:18px;flex-basis:100%}
+  .seg button{padding:5px 10px;font-size:14px}
+  .iconbtn{padding:5px 9px;font-size:14px}
+  .sync{font-size:12px}
+  main{padding:10px}
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px 10px}
+  .stat b{font-size:18px}
+  .stat span{font-size:11px}
+  .tools .btn{padding:7px 10px}
+  .pager span{min-width:auto}
+  .onlyphone{display:inline-flex}
+  .spread{gap:0}
+}
 .st-seg{background:var(--line)}
 .st-seg button{color:var(--text)}
 .st-seg button[aria-pressed="true"]{background:var(--cover);color:#fff}
@@ -188,8 +221,13 @@ summary{cursor:pointer;font-size:14px;color:var(--muted)}
       <button class="btn" id="av-import" hidden>Importer des pages</button>
       <button class="btn primary" id="av-add">Ajouter un vol</button>
     </div>
-    <div class="scroll"><div id="spread"></div></div>
-    <p class="hint">Touchez une ligne pour la modifier. Sur iPhone, faites glisser le carnet pour voir la page de droite.</p>
+    <div class="viewbar">
+      <div class="seg2" role="group" aria-label="Affichage"><button data-av="liste">Liste</button><button data-av="carnet">Carnet</button></div>
+      <div class="seg2 onlyphone" id="av-side" role="group" aria-label="Page"><button data-side="l">Page gauche</button><button data-side="r">Page droite</button></div>
+    </div>
+    <div id="av-list"></div>
+    <div class="scroll" id="av-carnet"><div id="spread"></div></div>
+    <p class="hint">Touchez une ligne pour la modifier.</p>
   </section>
 
   <!-- STATISTIQUES -->
@@ -219,7 +257,11 @@ summary{cursor:pointer;font-size:14px;color:var(--muted)}
       <button class="btn" id="dr-import" hidden>Importer des captures</button>
       <button class="btn primary" id="dr-add">Ajouter un vol</button>
     </div>
-    <div class="scroll"><div id="registre"></div></div>
+    <div class="viewbar">
+      <div class="seg2" role="group" aria-label="Affichage"><button data-dv="liste">Liste</button><button data-dv="carnet">Registre</button></div>
+    </div>
+    <div id="dr-list"></div>
+    <div class="scroll" id="dr-carnet"><div id="registre"></div></div>
     <p class="hint">Touchez une ligne pour la modifier.</p>
   </section>
 </main>
@@ -525,10 +567,12 @@ function init(){
   if(!window.firebase||FIREBASE_CONFIG.apiKey==='A_REMPLIR'){goLocal();return}
   firebase.initializeApp(FIREBASE_CONFIG);
   DB=firebase.firestore();
-  try{DB.settings({ignoreUndefinedProperties:true})}catch(e){}
+  try{DB.settings({ignoreUndefinedProperties:true,experimentalForceLongPolling:true})}catch(e){}
+  /* iPhone/iPad : relance la connexion au retour dans l'application ou du réseau */
+  const wake=()=>{if(document.hidden||!DB)return;DB.disableNetwork().then(()=>DB.enableNetwork()).catch(()=>{});};
+  document.addEventListener('visibilitychange',wake);window.addEventListener('online',wake);window.addEventListener('pageshow',wake);
   DB.enablePersistence({synchronizeTabs:true}).catch(()=>{});
   AUTH=firebase.auth();
-  AUTH.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(()=>{});
   AUTH.onAuthStateChanged(u=>{UNSUB.forEach(f=>f());UNSUB=[];
     if(!u){S.mode='local';setSync('Non connecté');$('#d-login').open||$('#d-login').showModal();return}
     $('#d-login').open&&$('#d-login').close();
@@ -548,7 +592,8 @@ function init(){
 }
 const fl=$('#fl');
 const authErr=e=>({'auth/invalid-credential':'Adresse ou mot de passe incorrect.','auth/wrong-password':'Mot de passe incorrect.','auth/user-not-found':'Aucun compte avec cette adresse : touche « Créer mon compte ».','auth/email-already-in-use':'Un compte existe déjà avec cette adresse : touche « Se connecter ».','auth/weak-password':'Le mot de passe doit faire au moins 6 caractères.','auth/network-request-failed':'Pas de connexion internet.','auth/invalid-email':'Adresse mail invalide.'}[e.code]||('Erreur : '+e.code));
-fl.onsubmit=e=>{e.preventDefault();$('#fl-err').textContent='';AUTH.signInWithEmailAndPassword(fl.elements.email.value.trim(),fl.elements.pwd.value).catch(e=>$('#fl-err').textContent=authErr(e))};
+try{fl.elements.email.value=localStorage.getItem('cdv-email')||''}catch(e){}
+fl.onsubmit=e=>{e.preventDefault();$('#fl-err').textContent='';try{localStorage.setItem('cdv-email',fl.elements.email.value.trim())}catch(e){}AUTH.signInWithEmailAndPassword(fl.elements.email.value.trim(),fl.elements.pwd.value).catch(e=>$('#fl-err').textContent=authErr(e))};
 $('#fl-create').onclick=()=>{if(!fl.reportValidity())return;AUTH.createUserWithEmailAndPassword(fl.elements.email.value.trim(),fl.elements.pwd.value).catch(e=>$('#fl-err').textContent=authErr(e))};
 $('#fl-reset').onclick=()=>{const m=fl.elements.email.value.trim();if(!m){$('#fl-err').textContent='Indique ton adresse mail d\'abord.';return}AUTH.sendPasswordResetEmail(m).then(()=>$('#fl-err').textContent='Un mail de réinitialisation t\'a été envoyé.').catch(e=>$('#fl-err').textContent=authErr(e))};
 $('#logout').onclick=()=>{AUTH&&AUTH.signOut();$('#d-save').close()};
@@ -601,13 +646,48 @@ function carnetTotals(F){
   const tg=MAIN.reduce((a,c)=>a+tot[c],0)+rows.reduce((a,f)=>a+sn(f.corrTG),0)+F.reduce((a,f)=>a+sn(f.corrTGc),0);
   return{tot,tg};
 }
+const PHONE=()=>window.matchMedia('(max-width:760px)').matches;
+S.avMode=null;S.drMode=null;S.side='l';
+function setPressed(sel,attr,val){document.querySelectorAll(sel).forEach(b=>b.setAttribute('aria-pressed',String(b.dataset[attr]===val)))}
+function liTime(f){
+  const parts=[];const L={mjd:'double',mjc:'CDB',mnd:'double nuit',mnc:'CDB nuit',xjd:'multi double',xjc:'multi CDB',xjp:'copilote',xnd:'multi nuit double',xnc:'multi nuit CDB',xnp:'copilote nuit'};
+  MAIN.forEach(c=>{if(num(f[c]))parts.push(fmt(f[c])+' '+L[c])});return parts.join(', ');
+}
+function listAvionHTML(F,k){
+  const start=k*LINES,rows=F.slice(start,start+LINES);
+  let h='<div class="lst">';
+  rows.forEach(f=>{
+    if(f.blank){h+=`<div class="li blank" data-id="${f.id}"><span class="s">${esc(f.obs)||'Ligne sans vol'}</span></div>`;return}
+    const t=MAIN.reduce((a,c)=>a+num(f[c]),0);
+    h+=`<div class="li" data-id="${f.id}"><span class="d">${dmy(f.date)}</span><span class="a">${esc(f.type)} ${esc(f.immat)} ${f.fonction?'('+esc(f.fonction)+')':''}</span><span class="t">${fmt(t)||'—'}</span>
+    <span class="s">${esc(f.nature)}${liTime(f)?' : '+liTime(f):''}${num(f.att)?', '+num(f.att)+' att.':''}${f.obs?' | '+esc(f.obs):''}</span></div>`;
+  });
+  if(rows.length<LINES)h+='<div class="li new" data-new>+ Ajouter un vol</div>';
+  h+='</div>';
+  const tot=sumCols(F.slice(0,start+rows.length),new Set(rows));
+  const tg=MAIN.reduce((a,c)=>a+tot[c],0)+rows.reduce((a,f)=>a+sn(f.corrTG),0)+F.slice(0,start+rows.length).reduce((a,f)=>a+sn(f.corrTGc),0);
+  const b=(v,l)=>`<div>${l}<b>${v}</b></div>`;
+  h+=`<div class="ptot">${b(fmtLong(tg),'Total général')}${b(fmt(tot.mjd)||'0h00','Double jour')}${b(fmt(tot.mjc)||'0h00','Cdt de bord jour')}${b(fmt(tot.mnd)||'0h00','Double nuit')}${b(fmt(tot.mnc)||'0h00','Cdt de bord nuit')}${b(tot.att,'Atterrissages')}</div>`;
+  return h;
+}
+function fitCarnet(){
+  const w=$('#av-carnet'),sp=$('#spread .spread');if(!sp)return;
+  sp.style.zoom='';
+  if(!PHONE())return;
+  const vis=sp.querySelector(S.side==='l'?'.pg-l':'.pg-r');if(!vis)return;
+  const z=Math.min(1,(w.clientWidth-4)/vis.offsetWidth);sp.style.zoom=z;
+}
 function renderAvion(){
   const F=S.avion,n=Math.max(1,Math.ceil((F.length+ (F.length%LINES===0&&F.length?0:0))/LINES));
   if(S.spread==null||S.spread>n-1)S.spread=n-1;
   $('#av-pos').textContent=`Page ${S.spread+1} sur ${n}`;
   $('#av-prev').disabled=$('#av-first').disabled=S.spread===0;
   $('#av-next').disabled=$('#av-last').disabled=S.spread>=n-1;
-  $('#spread').innerHTML=spreadHTML(F,S.spread,true);
+  if(!S.avMode)S.avMode=PHONE()?'liste':'carnet';
+  setPressed('[data-av]','av',S.avMode);setPressed('[data-side]','side',S.side);
+  $('#av-list').hidden=S.avMode!=='liste';$('#av-carnet').hidden=S.avMode!=='carnet';$('#av-side').style.visibility=S.avMode==='carnet'?'visible':'hidden';
+  if(S.avMode==='liste')$('#av-list').innerHTML=listAvionHTML(F,S.spread);
+  else{$('#spread').innerHTML=spreadHTML(F,S.spread,true);const sp=$('#spread .spread');if(sp&&PHONE())sp.classList.add(S.side==='l'?'pg-only-l':'pg-only-r');requestAnimationFrame(fitCarnet)}
   const FR=F.filter(f=>!f.blank);
   const T=carnetTotals(F),last=FR[FR.length-1];
   const box=(v,l)=>`<div class="stat"><b>${v}</b><span>${l}</span></div>`;
@@ -643,7 +723,15 @@ function renderDrone(){
   $('#dr-pos').textContent=`Page ${S.dpage+1} sur ${n}`;
   $('#dr-prev').disabled=$('#dr-first').disabled=S.dpage===0;
   $('#dr-next').disabled=$('#dr-last').disabled=S.dpage>=n-1;
-  $('#registre').innerHTML=registreHTML(F,S.dpage,true);
+  if(!S.drMode)S.drMode=PHONE()?'liste':'carnet';
+  setPressed('[data-dv]','dv',S.drMode);
+  $('#dr-list').hidden=S.drMode!=='liste';$('#dr-carnet').hidden=S.drMode!=='carnet';
+  if(S.drMode==='liste'){
+    const start=S.dpage*DLINES,rows=F.slice(start,start+DLINES);
+    let h='<div class="lst">'+rows.map(f=>`<div class="li" data-id="${f.id}"><span class="d">${dmy(f.date)}</span><span class="a">${esc(f.appareil)||esc(f.mission)||'—'}</span><span class="t">${fmt(f.duree)||'—'}</span><span class="s">${esc(f.lieu)}${f.cat?' | '+esc(f.cat):''} | ${nbvOf(f)} vol${nbvOf(f)>1?'s':''}${f.mission&&f.appareil?' | '+esc(f.mission):''}${f.obs?' | '+esc(f.obs):''}</span></div>`).join('');
+    if(rows.length<DLINES)h+='<div class="li new" data-new>+ Ajouter un vol</div>';
+    $('#dr-list').innerHTML=h+'</div>';
+  }else $('#registre').innerHTML=registreHTML(F,S.dpage,true);
   const tot=F.reduce((a,f)=>a+num(f.duree),0),nb=F.reduce((a,f)=>a+nbvOf(f),0);
   const byCat={};F.forEach(f=>{byCat[f.cat||'—']=(byCat[f.cat||'—']||0)+num(f.duree)});
   $('#dr-stats').innerHTML=`<div class="stat"><b>${fmtLong(tot)}</b><span>Temps de vol</span></div><div class="stat"><b>${nb}</b><span>Vols</span></div>`+
@@ -842,6 +930,12 @@ $('#av-next').onclick=()=>{S.spread++;renderAvion()};$('#av-last').onclick=()=>{
 $('#dr-first').onclick=()=>{S.dpage=0;renderDrone()};$('#dr-prev').onclick=()=>{S.dpage--;renderDrone()};
 $('#dr-next').onclick=()=>{S.dpage++;renderDrone()};$('#dr-last').onclick=()=>{S.dpage=1e9;renderDrone()};
 document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>b.closest('dialog').close());
+$('#av-list').onclick=e=>{const li=e.target.closest('.li');if(!li||li.classList.contains('blank'))return;if(li.dataset.id)openAvion(li.dataset.id);else if(li.hasAttribute('data-new'))openAvion(null)};
+$('#dr-list').onclick=e=>{const li=e.target.closest('.li');if(!li)return;if(li.dataset.id)openDrone(li.dataset.id);else if(li.hasAttribute('data-new'))openDrone(null)};
+document.querySelectorAll('[data-av]').forEach(b=>b.onclick=()=>{S.avMode=b.dataset.av;renderAvion()});
+document.querySelectorAll('[data-side]').forEach(b=>b.onclick=()=>{S.side=b.dataset.side;renderAvion()});
+document.querySelectorAll('[data-dv]').forEach(b=>b.onclick=()=>{S.drMode=b.dataset.dv;renderDrone()});
+window.addEventListener('resize',()=>{if(S.avMode==='carnet')renderAvion()});
 $('#spread').onclick=e=>{const tr=e.target.closest('tr.ln');if(!tr)return;if(tr.dataset.id)openAvion(tr.dataset.id);else if(tr.hasAttribute('data-new'))openAvion(null)};
 $('#registre').onclick=e=>{const tr=e.target.closest('tr.ln');if(!tr)return;if(tr.dataset.id)openDrone(tr.dataset.id);else if(tr.hasAttribute('data-new'))openDrone(null)};
 $('#av-add').onclick=()=>openAvion(null);$('#dr-add').onclick=()=>openDrone(null);
