@@ -466,7 +466,8 @@ function writeYears(kind,years){
     }
   });
 }
-function setSync(t){$('#sync').textContent=t}
+let BK_TODAY=false;
+function setSync(t){$('#sync').textContent=(t==='Synchronisé'&&BK_TODAY)?'Synchronisé et sauvegardé':t}
 
 /* ====== Configuration Firebase : à remplir avec celle de ton projet ====== */
 const FIREBASE_CONFIG = {
@@ -492,10 +493,11 @@ async function doBackup(){
   BK_DONE=true;
   try{
     const col=BASE.collection('backups'),ref=col.doc('b'+stamp());
-    const snap=await ref.get();if(snap.exists)return;
+    const snap=await ref.get();if(snap.exists){BK_TODAY=true;setSync($('#sync').textContent);return}
     await ref.set({date:new Date().toISOString(),nAvion:S.avion.filter(f=>!f.blank).length,nDrone:S.drone.length,data:backupPayload()});
     const all=(await col.get()).docs.map(d=>d.id).sort().reverse();
     for(const id of all.slice(BK_KEEP))await col.doc(id).delete();
+    BK_TODAY=true;setSync($('#sync').textContent);
   }catch(e){BK_DONE=false}
 }
 async function listBackups(){
