@@ -99,6 +99,8 @@ summary{cursor:pointer;font-size:14px;color:var(--muted)}
 .review td,.review th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;white-space:nowrap}
 .ok{color:var(--ok)} .warn{color:var(--warn)}
 .row2{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.bk{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid var(--line);color:var(--text)}
+.bk span{margin-right:auto}
 .st-sec h2{font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:24px;margin:8px 2px 10px}
 .st-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;margin-bottom:24px}
 .card{background:var(--field);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
@@ -357,6 +359,10 @@ summary{cursor:pointer;font-size:14px;color:var(--muted)}
     </div>
     <p class="hint">Les fichiers à imprimer s'ouvrent dans Safari : Partager, puis Imprimer, puis enregistrer en PDF.</p>
   </fieldset>
+  <fieldset><legend>Sauvegardes automatiques</legend>
+    <p class="hint">Une copie complète de tes carnets est faite automatiquement chaque jour où tu ouvres l'application. Les 30 dernières sont conservées.</p>
+    <div id="bk-list" class="hint">Chargement…</div>
+  </fieldset>
   <fieldset><legend>Restaurer une sauvegarde complète</legend>
     <label class="f">Fichier .json<input type="file" id="r-file" accept=".json,application/json"></label>
     <p class="hint">Les vols de la sauvegarde s'ajoutent à ceux déjà présents ; aucun vol n'est effacé.</p>
@@ -471,7 +477,47 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "439768331533",
   appId: "1:439768331533:web:3fc7e789fd8bd574446c44"
 };
-let AUTH=null,UNSUB=[];
+let AUTH=null,UNSUB=[],GOT={avion:false,drone:false},BK_DONE=false;
+const BK_KEEP=30;
+const backupPayload=()=>JSON.stringify({format:'carnets-de-vol',version:1,date:new Date().toISOString(),avion:S.avion,drone:S.drone,settings:S.settings});
+/* Sauvegarde automatique : une copie par jour, dans ton compte, 30 conservées */
+let BK_TIMER=null;
+function autoBackup(){ /* attend 30 s de calme (aucune écriture en cours) avant de copier */
+  if(BK_DONE||!GOT.avion||!GOT.drone||!BASE)return;
+  clearTimeout(BK_TIMER);BK_TIMER=setTimeout(doBackup,30000);
+}
+async function doBackup(){
+  if(BK_DONE||!BASE)return;
+  if(!S.avion.length&&!S.drone.length)return;
+  BK_DONE=true;
+  try{
+    const col=BASE.collection('backups'),ref=col.doc('b'+stamp());
+    const snap=await ref.get();if(snap.exists)return;
+    await ref.set({date:new Date().toISOString(),nAvion:S.avion.filter(f=>!f.blank).length,nDrone:S.drone.length,data:backupPayload()});
+    const all=(await col.get()).docs.map(d=>d.id).sort().reverse();
+    for(const id of all.slice(BK_KEEP))await col.doc(id).delete();
+  }catch(e){BK_DONE=false}
+}
+async function listBackups(){
+  const box=$('#bk-list');
+  if(S.mode!=='sync'||!BASE){box.textContent='Disponible une fois connecté.';return}
+  try{
+    const docs=(await BASE.collection('backups').get()).docs.sort((a,b)=>a.id<b.id?1:-1);
+    if(!docs.length){box.textContent='Aucune sauvegarde pour le moment : la première sera faite à la prochaine ouverture.';return}
+    box.innerHTML=docs.map(d=>{const v=d.data(),dt=new Date(v.date);
+      return `<div class="bk"><span>${dt.toLocaleDateString('fr-FR')} à ${dt.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})} : ${v.nAvion} vols avion, ${v.nDrone} lignes drone</span>
+      <button type="button" class="btn" data-dl="${d.id}">Télécharger</button><button type="button" class="btn" data-rs="${d.id}">Restaurer</button></div>`}).join('');
+    const get=id=>docs.find(d=>d.id===id).data();
+    box.querySelectorAll('[data-dl]').forEach(b=>b.onclick=()=>save(`carnets-de-vol-sauvegarde-${b.dataset.dl.slice(1)}.json`,get(b.dataset.dl).data));
+    box.querySelectorAll('[data-rs]').forEach(b=>b.onclick=async()=>{
+      if(b.dataset.arm!=='1'){b.dataset.arm='1';b.textContent='Confirmer : remplacer mes carnets';setTimeout(()=>{b.dataset.arm='';b.textContent='Restaurer'},5000);return}
+      const d=JSON.parse(get(b.dataset.rs).data);
+      for(const kind of ['avion','drone']){const years=[...new Set([...S[kind],...(d[kind]||[])].map(yearOf))];S[kind]=sortList(d[kind]||[]);writeYears(kind,years)}
+      S.settings={...DEF_SETTINGS,...(d.settings||{})};queue(()=>BASE.set({settings:S.settings},{merge:true}));
+      render();$('#d-save').close();toast('Carnets restaurés à la sauvegarde du '+new Date(get(b.dataset.rs).date).toLocaleDateString('fr-FR'));
+    });
+  }catch(e){box.textContent='Liste indisponible (hors ligne ?).'}
+}
 function init(){
   loadLocal();render();
   if(!window.firebase||FIREBASE_CONFIG.apiKey==='A_REMPLIR'){goLocal();return}
@@ -486,11 +532,12 @@ function init(){
     $('#d-login').open&&$('#d-login').close();
     $('#acct').textContent='Connecté : '+u.email;
     BASE=DB.collection('users').doc(u.uid);
-    S.mode='sync';$('#local-banner').hidden=true;setSync('Synchronisation…');
+    S.mode='sync';$('#local-banner').hidden=true;setSync('Synchronisation…');GOT={avion:false,drone:false};BK_DONE=false;
     const onErr=()=>setSync('Synchronisation interrompue');
     const listen=kind=>BASE.collection(kind).onSnapshot({includeMetadataChanges:true},qs=>{
       const all=[];qs.docs.forEach(d=>{const v=d.data();if(v&&Array.isArray(v.vols))all.push(...v.vols)});
       S[kind]=sortList(all);saveLocal();render();
+      if(!qs.metadata.fromCache){GOT[kind]=true;autoBackup()}
       setSync(qs.metadata.hasPendingWrites?'Enregistré sur l\'appareil, envoi en cours…':qs.metadata.fromCache?'Hors ligne, enregistré sur l\'appareil':'Synchronisé');
     },onErr);
     UNSUB.push(listen('avion'),listen('drone'));
@@ -1043,7 +1090,7 @@ $('#imp-add').onclick=()=>{
 
 /* ---------- Sauvegarde, exports, réglages ---------- */
 const fs=$('#fs');
-$('#open-save').onclick=()=>{Object.keys(DEF_SETTINGS).forEach(k=>fs.elements[k].value=S.settings[k]||'');$('#d-save').showModal()};
+$('#open-save').onclick=()=>{Object.keys(DEF_SETTINGS).forEach(k=>fs.elements[k].value=S.settings[k]||'');$('#d-save').showModal();listBackups()};
 $('#s-save').onclick=()=>{
   Object.keys(DEF_SETTINGS).forEach(k=>S.settings[k]=fs.elements[k].value.trim());saveLocal();renderDrone();
   if(S.mode==='sync')queue(()=>BASE.set({settings:S.settings},{merge:true}));
