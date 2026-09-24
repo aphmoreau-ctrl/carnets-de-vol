@@ -1,0 +1,1115 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Carnets de vol</title>
+<meta name="theme-color" content="#1d2b45">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Carnets de vol">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600&family=Barlow:wght@400;500;600&family=Kalam:wght@400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --cover:#1d2b45; --cover-2:#2a3b5c; --on-cover:#eef1f7;
+  --paper:#fbfbf8; --print:#3d3960; --rule:#8d89a8; --ink:#1c3b98;
+  --bg:#e9ebef; --text:#1a1f2b; --muted:#5d6475; --line:#cfd3dc; --warn:#a4331c; --ok:#26734d;
+  --field:#ffffff;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#10151f; --text:#e6e9f0; --muted:#9aa3b5; --line:#2c3445; --field:#1a2130;
+    --paper:#ecebe4; --cover:#0c1322; --cover-2:#18223a;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#10151f; --text:#e6e9f0; --muted:#9aa3b5; --line:#2c3445; --field:#1a2130;
+  --paper:#ecebe4; --cover:#0c1322; --cover-2:#18223a;
+}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Barlow,"Helvetica Neue",Arial,sans-serif;font-size:16px;line-height:1.4}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+
+/* Barre du haut, couleur de la couverture du carnet */
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--cover);color:var(--on-cover);padding:10px 14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.bar h1{margin:0;font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:22px;letter-spacing:.02em;margin-right:auto}
+.seg{display:flex;background:var(--cover-2);border-radius:9px;padding:3px}
+.seg button{border:0;background:transparent;color:var(--on-cover);padding:6px 16px;border-radius:7px;font-weight:500}
+.seg button[aria-pressed="true"]{background:var(--on-cover);color:var(--cover)}
+.sync{font-size:13px;opacity:.85}
+.iconbtn{border:1px solid rgba(255,255,255,.35);background:transparent;color:var(--on-cover);border-radius:8px;padding:6px 12px}
+
+main{max-width:1460px;margin:0 auto;padding:14px}
+.banner{background:#fff3d6;color:#5a4200;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:14px}
+.stats{display:flex;flex-wrap:wrap;gap:22px;margin:4px 2px 14px}
+.stat b{display:block;font-family:"Barlow Condensed",sans-serif;font-size:30px;font-weight:600;line-height:1}
+.stat span{font-size:13px;color:var(--muted)}
+.tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+.btn{border:1px solid var(--line);background:var(--field);border-radius:8px;padding:8px 14px;font-weight:500}
+.btn.primary{background:var(--cover);border-color:var(--cover);color:#fff}
+.btn:disabled{opacity:.45;cursor:default}
+.pager{display:flex;align-items:center;gap:6px;margin-right:auto}
+.pager span{min-width:110px;text-align:center;font-size:14px;color:var(--muted)}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:6px}
+.hint{font-size:13px;color:var(--muted);margin:8px 2px}
+[hidden]{display:none!important}
+
+/* Boîtes de dialogue */
+dialog{border:0;border-radius:14px;padding:0;width:min(640px,calc(100vw - 20px));max-height:calc(100dvh - 40px);background:var(--bg);color:var(--text)}
+dialog::backdrop{background:rgba(10,15,25,.55)}
+.dlg{padding:18px 18px 16px}
+.dlg h2{margin:0 0 14px;font-family:"Barlow Condensed",sans-serif;font-size:24px;font-weight:600}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
+label.f input,label.f select,label.f textarea{border:1px solid var(--line);background:var(--field);border-radius:8px;padding:8px 10px;font-size:16px;color:var(--text);width:100%}
+fieldset{border:1px solid var(--line);border-radius:10px;margin:14px 0 0;padding:10px 12px}
+legend{font-size:13px;color:var(--muted);padding:0 4px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips label{display:inline-flex}
+.chips input{position:absolute;opacity:0;pointer-events:none}
+.chips span{border:1px solid var(--line);background:var(--field);border-radius:20px;padding:6px 12px;font-size:14px}
+.chips input:checked+span{background:var(--cover);color:#fff;border-color:var(--cover)}
+.chips input:disabled+span{opacity:.35}
+.chips input:focus-visible+span{outline:2px solid var(--ink)}
+details{margin-top:14px}
+summary{cursor:pointer;font-size:14px;color:var(--muted)}
+.actions{display:flex;gap:8px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap}
+.actions .del{margin-right:auto;color:var(--warn)}
+.sigwrap{background:#fff;border:1px dashed var(--rule);border-radius:8px;touch-action:none}
+.sigwrap canvas{display:block;width:100%;height:110px}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--cover);color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;z-index:50;max-width:90vw}
+.review{margin-top:12px}
+.review h3{font-size:15px;margin:14px 0 6px}
+.review table{border-collapse:collapse;width:100%;font-size:13px}
+.review td,.review th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;white-space:nowrap}
+.ok{color:var(--ok)} .warn{color:var(--warn)}
+.row2{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.st-sec h2{font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:24px;margin:8px 2px 10px}
+.st-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;margin-bottom:24px}
+.card{background:var(--field);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.card h3{margin:0 0 10px;font-size:15px;font-weight:600}
+.bar{display:grid;grid-template-columns:minmax(70px,120px) 1fr 62px;gap:8px;align-items:center;font-size:13px;margin:5px 0}
+.bar .bk{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar .bt{height:12px;background:var(--bg);border-radius:3px;overflow:hidden}
+.bar .bt i{display:block;height:100%;background:var(--ink);border-radius:3px}
+.bar .bv{text-align:right;font-variant-numeric:tabular-nums}
+.kv{display:grid;grid-template-columns:1fr auto;gap:4px 12px;font-size:14px}
+.kv b{font-variant-numeric:tabular-nums;text-align:right}
+.empty{color:var(--muted);font-size:14px}
+.st-seg{background:var(--line)}
+.st-seg button{color:var(--text)}
+.st-seg button[aria-pressed="true"]{background:var(--cover);color:#fff}
+.st-sec h2 small{font-family:Barlow,sans-serif;font-weight:400;font-size:14px;color:var(--muted);margin-left:8px}
+.quick{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 14px}
+.quick button{border:1px solid var(--line);background:var(--field);border-radius:20px;padding:6px 12px;font-size:14px}
+.quick button b{font-weight:600}
+.quick button span{color:var(--muted);margin-left:5px}
+.quick button[aria-pressed="true"]{border-color:var(--cover);box-shadow:inset 0 0 0 1px var(--cover)}
+</style>
+
+<style id="paper-css">
+/* Reproduction du carnet de vol DGAC */
+.spread{display:flex;gap:18px;width:max-content;margin:0 auto}
+.pg{background:var(--paper,#fbfbf8);color:var(--print,#3d3960);padding:14px 16px 12px;border-radius:3px;box-shadow:0 1px 3px rgba(0,0,0,.18);position:relative;font-family:"Barlow Condensed","Arial Narrow",Arial,sans-serif}
+.pg .num{position:absolute;top:6px;font-size:10px}
+.pg-l .num{left:10px}.pg-r .num{right:10px}
+.pg .year{text-align:center;font-weight:600;font-size:15px;height:24px;letter-spacing:.03em}
+.pg .year i{font-family:Kalam,"Comic Sans MS",cursive;font-style:normal;font-weight:400;color:var(--ink,#1c3b98);font-size:17px;margin-left:6px}
+.cv{border-collapse:collapse;table-layout:fixed;border:1.5px solid var(--print,#3d3960)}
+.cv th,.cv td{border:1px solid var(--rule,#8d89a8);padding:0 3px;overflow:hidden;white-space:nowrap;text-overflow:clip}
+.cv th{font-weight:500;font-size:10.5px;line-height:1.1;text-align:center;text-transform:uppercase;color:var(--print,#3d3960);border-color:var(--print,#3d3960)}
+.cv th.sm{text-transform:none;font-size:10px}
+.cv th.nat{position:relative;vertical-align:middle}
+.cv th.nat em{position:absolute;right:4px;bottom:3px;font-style:italic;text-transform:none;font-size:10px}
+.cv th.vert{writing-mode:vertical-rl;transform:rotate(180deg);font-size:9.5px}
+.cv tr.rep td{height:22px}
+.cv tr.ln td{height:27px;font-family:Kalam,"Comic Sans MS",cursive;color:var(--ink,#1c3b98);font-size:14px;line-height:27px}
+.cv tr.ln td.n,.cv tr.rep td,.cv tr.tot td.n{text-align:center}
+.cv tr.rep td,.cv tr.tot td.n{font-family:Kalam,"Comic Sans MS",cursive;color:var(--ink,#1c3b98);font-size:14px}
+.cv tr.tot td{height:28px}
+.cv tr.tot td.lab{text-align:right;font-style:italic;font-size:11px;color:var(--print,#3d3960);font-family:"Barlow Condensed",Arial,sans-serif}
+.cv td.obs{font-size:12px;position:relative}
+.cv td.obs img{height:25px;vertical-align:middle;margin-right:4px}
+.cv td.foot{font-size:9.5px;font-family:"Barlow Condensed",Arial,sans-serif;color:var(--print,#3d3960);text-align:right;vertical-align:bottom}
+.cv tr.ln[data-id],.cv tr.ln[data-new]{cursor:pointer}
+.cv tr.ln[data-id]:hover td{background:rgba(28,59,152,.06)}
+.cv tr.ln[data-new] td:first-child{position:relative}
+.cv tr.ln[data-new] td:first-child::after{content:"+";position:absolute;left:0;right:0;text-align:center;color:var(--rule,#8d89a8);font-family:Barlow,Arial,sans-serif}
+.pg .tg{font-size:11px;margin-top:6px}
+.pg .tg i{font-family:Kalam,cursive;font-style:normal;color:var(--ink,#1c3b98);font-size:15px;margin:0 3px}
+.reg-head{display:flex;flex-wrap:wrap;gap:4px 26px;font-size:12px;margin:2px 0 8px}
+.reg-head i{font-family:Kalam,cursive;font-style:normal;color:var(--ink,#1c3b98);font-size:14px;margin-left:4px}
+.reg-title{text-align:center;font-weight:600;font-size:15px;letter-spacing:.03em;margin-bottom:6px}
+</style>
+</head>
+<body>
+<header class="bar">
+  <h1>Carnets de vol</h1>
+  <div class="seg" role="group" aria-label="Carnet">
+    <button id="tab-avion" aria-pressed="true">Avion</button>
+    <button id="tab-drone" aria-pressed="false">Drone</button>
+    <button id="tab-stats" aria-pressed="false">Statistiques</button>
+  </div>
+  <span class="sync" id="sync">Chargement…</span>
+  <button class="iconbtn" id="open-save">Sauvegarde</button>
+</header>
+
+<main>
+  <div class="banner" id="local-banner" hidden>Pas de connexion au serveur : les vols saisis sont gardés sur cet appareil et seront envoyés dès que la connexion reviendra.</div>
+
+  <!-- AVION -->
+  <section id="v-avion">
+    <div class="stats" id="av-stats"></div>
+    <div class="tools">
+      <div class="pager">
+        <button class="btn" id="av-first" aria-label="Première page">«</button>
+        <button class="btn" id="av-prev" aria-label="Page précédente">‹</button>
+        <span id="av-pos"></span>
+        <button class="btn" id="av-next" aria-label="Page suivante">›</button>
+        <button class="btn" id="av-last" aria-label="Dernière page">»</button>
+      </div>
+      <button class="btn" id="av-import" hidden>Importer des pages</button>
+      <button class="btn primary" id="av-add">Ajouter un vol</button>
+    </div>
+    <div class="scroll"><div id="spread"></div></div>
+    <p class="hint">Touchez une ligne pour la modifier. Sur iPhone, faites glisser le carnet pour voir la page de droite.</p>
+  </section>
+
+  <!-- STATISTIQUES -->
+  <section id="v-stats" hidden>
+    <div class="tools">
+      <div class="seg st-seg" role="group" aria-label="Statistiques de quel carnet">
+        <button id="st-avion" aria-pressed="true">Carnet avion</button>
+        <button id="st-drone" aria-pressed="false">Registre drone</button>
+      </div>
+      <span style="margin-right:auto"></span>
+      <button class="btn primary" id="st-xlsx">Exporter en Excel</button>
+    </div>
+    <div id="stats"></div>
+  </section>
+
+  <!-- DRONE -->
+  <section id="v-drone" hidden>
+    <div class="stats" id="dr-stats"></div>
+    <div class="tools">
+      <div class="pager">
+        <button class="btn" id="dr-first" aria-label="Première page">«</button>
+        <button class="btn" id="dr-prev" aria-label="Page précédente">‹</button>
+        <span id="dr-pos"></span>
+        <button class="btn" id="dr-next" aria-label="Page suivante">›</button>
+        <button class="btn" id="dr-last" aria-label="Dernière page">»</button>
+      </div>
+      <button class="btn" id="dr-import" hidden>Importer des captures</button>
+      <button class="btn primary" id="dr-add">Ajouter un vol</button>
+    </div>
+    <div class="scroll"><div id="registre"></div></div>
+    <p class="hint">Touchez une ligne pour la modifier.</p>
+  </section>
+</main>
+
+<!-- Formulaire vol avion -->
+<dialog id="d-avion"><form class="dlg" method="dialog" id="fa">
+  <h2 id="fa-title">Vol avion</h2>
+  <div class="quick" id="fa-planes" aria-label="Avions déjà utilisés"></div>
+  <div class="grid">
+    <label class="f">Date<input type="date" name="date" required></label>
+    <label class="f">Type<input name="type" list="dl-type" autocomplete="off" placeholder="DA 40 D"></label>
+    <label class="f">Immatriculation<input name="immat" list="dl-immat" autocomplete="off" placeholder="F-GXXX" style="text-transform:uppercase"></label>
+    <label class="f">Fonction à bord<input name="fonction" list="dl-fonction" autocomplete="off" placeholder="CDB"></label>
+    <label class="f" style="grid-column:1/-1">Nature du vol<input name="nature" list="dl-nature" autocomplete="off" placeholder="LOCAL, NAV LFSX-LFSD…"></label>
+  </div>
+
+  <fieldset id="fa-quick">
+    <legend>Temps de vol pilote</legend>
+    <div class="grid">
+      <label class="f">Durée<input name="dur" inputmode="text" placeholder="1h05"></label>
+    </div>
+    <div class="row2 chips">
+      <label><input type="radio" name="mot" value="m" checked><span>Monomoteur</span></label>
+      <label><input type="radio" name="mot" value="x"><span>Multimoteur</span></label>
+    </div>
+    <div class="row2 chips">
+      <label><input type="radio" name="per" value="j" checked><span>Jour</span></label>
+      <label><input type="radio" name="per" value="n"><span>Nuit</span></label>
+    </div>
+    <div class="row2 chips">
+      <label><input type="radio" name="role" value="d"><span>Double</span></label>
+      <label><input type="radio" name="role" value="c" checked><span>Cdt de bord</span></label>
+      <label><input type="radio" name="role" value="p"><span>Co-pilote</span></label>
+    </div>
+  </fieldset>
+
+  <fieldset id="fa-detail" hidden>
+    <legend>Temps par colonne</legend>
+    <div class="grid" id="fa-detail-grid"></div>
+  </fieldset>
+  <label class="hint" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="fa-detail-toggle"> Répartir sur plusieurs colonnes</label>
+
+  <details id="fa-more">
+    <summary>Équipage, instruments, simulation, arrivées IFR, atterrissages</summary>
+    <div class="grid" style="margin-top:10px">
+      <label class="f">Membre d'équipage jour<input name="eqj" placeholder="0h00"></label>
+      <label class="f">Membre d'équipage nuit<input name="eqn" placeholder="0h00"></label>
+      <label class="f">Instruments double<input name="ifd" placeholder="0h00"></label>
+      <label class="f">Instruments pilote<input name="ifp" placeholder="0h00"></label>
+      <label class="f">Simulation<input name="sim" placeholder="0h00"></label>
+      <label class="f">Arrivées IFR<input name="arr" type="number" min="0" step="1"></label>
+      <label class="f">Atterrissages<input name="att" type="number" min="0" step="1"></label>
+    </div>
+  </details>
+
+  <p class="hint" id="fa-corr" hidden></p>
+  <fieldset>
+    <legend>Observations et visa</legend>
+    <label class="f">Observations<input name="obs" autocomplete="off"></label>
+    <p class="hint" style="margin:10px 0 6px">Visa de l'instructeur (signature au doigt ou au stylet)</p>
+    <div class="sigwrap"><canvas id="sig" width="600" height="220"></canvas></div>
+    <div class="row2"><button type="button" class="btn" id="sig-clear">Effacer le visa</button></div>
+  </fieldset>
+
+  <div class="actions">
+    <button type="button" class="btn del" id="fa-del">Supprimer</button>
+    <button type="button" class="btn" data-close>Annuler</button>
+    <button type="submit" class="btn primary">Enregistrer</button>
+  </div>
+</form></dialog>
+
+<!-- Formulaire vol drone -->
+<dialog id="d-drone"><form class="dlg" method="dialog" id="fd">
+  <h2 id="fd-title">Vol drone</h2>
+  <div class="quick" id="fd-apps" aria-label="Appareils déjà utilisés"></div>
+  <div class="grid">
+    <label class="f">Date<input type="date" name="date" required></label>
+    <label class="f">Heure de décollage<input type="time" name="heure"></label>
+    <label class="f" style="grid-column:1/-1">Lieu<input name="lieu" list="dl-lieu" autocomplete="off" placeholder="Commune, site"></label>
+    <label class="f">Appareil<input name="appareil" list="dl-appareil" autocomplete="off"></label>
+    <label class="f">Identifiant / n° de série<input name="ident" list="dl-ident" autocomplete="off"></label>
+    <label class="f">Catégorie
+      <select name="cat">
+        <option value="">Non précisée</option><option>Open</option><option>A1</option><option>A2</option><option>A3</option>
+        <option>STS-01</option><option>STS-02</option><option>Spécifique</option><option>Formation</option><option>Antérieur (estimation)</option>
+      </select></label>
+    <label class="f">Nombre de vols<input name="nbv" type="number" min="0" step="1" value="1"></label>
+    <label class="f">Temps de vol total<input name="duree" placeholder="0h25"></label>
+    <label class="f" style="grid-column:1/-1">Mission / client<input name="mission" list="dl-mission" autocomplete="off"></label>
+    <label class="f" style="grid-column:1/-1">Observations<input name="obs" autocomplete="off"></label>
+  </div>
+  <div class="actions">
+    <button type="button" class="btn del" id="fd-del">Supprimer</button>
+    <button type="button" class="btn" data-close>Annuler</button>
+    <button type="submit" class="btn primary">Enregistrer</button>
+  </div>
+</form></dialog>
+
+<!-- Import -->
+<dialog id="d-import"><div class="dlg">
+  <h2 id="imp-title">Importer</h2>
+  <p class="hint" id="imp-help"></p>
+  <div class="grid">
+    <label class="f" style="grid-column:1/-1">Photos<input type="file" id="imp-files" accept="image/*" multiple></label>
+    <label class="f" id="imp-year-wrap">Année de début si l'en-tête est illisible<input id="imp-year" inputmode="numeric" placeholder="1999"></label>
+  </div>
+  <div class="row2"><button class="btn primary" id="imp-run">Lire les photos</button><button class="btn" id="imp-stop" hidden>Arrêter</button></div>
+  <p class="hint" id="imp-status" aria-live="polite"></p>
+  <div class="review" id="imp-review"></div>
+  <div class="actions">
+    <button class="btn" data-close>Fermer</button>
+    <button class="btn primary" id="imp-add" hidden>Ajouter les vols cochés</button>
+  </div>
+</div></dialog>
+
+<!-- Sauvegarde et réglages -->
+<dialog id="d-save"><form class="dlg" method="dialog" id="fs">
+  <h2>Sauvegarde et réglages</h2>
+  <fieldset><legend>Identité portée sur les exports</legend>
+    <div class="grid">
+      <label class="f">Pilote / télépilote<input name="nom"></label>
+      <label class="f">N° de licence avion<input name="licence"></label>
+      <label class="f">Exploitant UAS<input name="exploitant"></label>
+      <label class="f">N° d'exploitant UAS<input name="numExploitant"></label>
+      <label class="f">N° certificat télépilote<input name="certif"></label>
+    </div>
+    <div class="row2"><button type="button" class="btn" id="s-save">Enregistrer les réglages</button></div>
+  </fieldset>
+  <fieldset><legend>Exporter</legend>
+    <div class="row2">
+      <button type="button" class="btn" id="x-av-html">Carnet avion à imprimer</button>
+      <button type="button" class="btn" id="x-dr-html">Registre drone à imprimer</button>
+      <button type="button" class="btn primary" id="x-xlsx">Tout en Excel</button>
+      <button type="button" class="btn" id="x-av-csv">Avion en CSV</button>
+      <button type="button" class="btn" id="x-dr-csv">Drone en CSV</button>
+      <button type="button" class="btn primary" id="x-json">Sauvegarde complète</button>
+    </div>
+    <p class="hint">Les fichiers à imprimer s'ouvrent dans Safari : Partager, puis Imprimer, puis enregistrer en PDF.</p>
+  </fieldset>
+  <fieldset><legend>Restaurer une sauvegarde complète</legend>
+    <label class="f">Fichier .json<input type="file" id="r-file" accept=".json,application/json"></label>
+    <p class="hint">Les vols de la sauvegarde s'ajoutent à ceux déjà présents ; aucun vol n'est effacé.</p>
+  </fieldset>
+  <fieldset><legend>Compte</legend>
+    <p class="hint" id="acct"></p>
+    <div class="row2"><button type="button" class="btn" id="logout">Se déconnecter</button></div>
+  </fieldset>
+  <div class="actions"><button type="button" class="btn" data-close>Fermer</button></div>
+</form></dialog>
+
+<dialog id="d-login"><form class="dlg" id="fl">
+  <h2>Connexion</h2>
+  <p class="hint">Utilise la même adresse et le même mot de passe sur l'iPhone et l'iPad : tes carnets s'y retrouvent automatiquement.</p>
+  <div class="grid">
+    <label class="f" style="grid-column:1/-1">Adresse mail<input name="email" type="email" autocomplete="username" required></label>
+    <label class="f" style="grid-column:1/-1">Mot de passe<input name="pwd" type="password" autocomplete="current-password" minlength="6" required></label>
+  </div>
+  <p class="hint warn" id="fl-err" aria-live="polite"></p>
+  <div class="actions">
+    <button type="button" class="btn" id="fl-reset">Mot de passe oublié</button>
+    <button type="button" class="btn" id="fl-create">Créer mon compte</button>
+    <button type="submit" class="btn primary">Se connecter</button>
+  </div>
+</form></dialog>
+<datalist id="dl-type"></datalist><datalist id="dl-immat"></datalist>
+<datalist id="dl-fonction"><option>EP</option><option>P</option><option>CDB</option><option>FI</option><option>Co-pilote</option></datalist>
+<datalist id="dl-nature"></datalist><datalist id="dl-lieu"></datalist>
+<datalist id="dl-appareil"><option>DJI Agras T100</option><option>DJI Mini 4 Pro</option></datalist>
+<datalist id="dl-ident"></datalist><datalist id="dl-mission"></datalist>
+
+<script>
+"use strict";
+/* ---------- Constantes ---------- */
+const MAIN=['mjd','mjc','mnd','mnc','xjd','xjc','xjp','xnd','xnc','xnp'];
+const LEFT=['eqj','eqn','mjd','mjc','mnd','mnc'];
+const RIGHT=['xjd','xjc','xjp','xnd','xnc','xnp','ifd','ifp','sim'];
+const ALL=[...LEFT,...RIGHT];
+const LBL={eqj:'Équipage jour',eqn:'Équipage nuit',mjd:'Mono jour double',mjc:'Mono jour Cdt',mnd:'Mono nuit double',mnc:'Mono nuit Cdt',
+  xjd:'Multi jour double',xjc:'Multi jour Cdt',xjp:'Multi jour co-pilote',xnd:'Multi nuit double',xnc:'Multi nuit Cdt',xnp:'Multi nuit co-pilote',
+  ifd:'Instruments double',ifp:'Instruments pilote',sim:'Simulation'};
+const LINES=14, DLINES=20, CACHE='cdv-cache-v1';
+const DEF_SETTINGS={nom:'Arnaud Moreau',licence:'',exploitant:'APH SASU',numExploitant:'',certif:''};
+
+/* ---------- État ---------- */
+const S={statsOf:'avion',avion:[],drone:[],settings:{...DEF_SETTINGS},mode:'loading',spread:null,dpage:null,view:'avion'};
+let DB=null, BASE=null, SAMPLE=null, DL=null;
+
+/* ---------- Outils ---------- */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+const num=v=>{const n=Math.round(Number(v));return Number.isFinite(n)&&n>0?n:0};
+function fmt(m){m=num(m);if(!m)return'';return Math.floor(m/60)+'h'+String(m%60).padStart(2,'0')}
+function fmtLong(m){m=num(m);return Math.floor(m/60)+' h '+String(m%60).padStart(2,'0')}
+function parseDur(s){
+  s=String(s??'').trim().toLowerCase().replace(/\s+/g,'');
+  if(!s)return 0;
+  let r=s.match(/^(\d+)[h:](\d{1,2})?(min|m)?$/); if(r)return +r[1]*60+(+r[2]||0);
+  r=s.match(/^(\d+)(['’]|min|mn|m)?$/); if(r)return +r[1];
+  r=s.match(/^(\d+)[.,](\d+)$/); if(r)return Math.round(parseFloat(r[1]+'.'+r[2])*60);
+  return NaN;
+}
+const dm=d=>d?d.slice(8,10)+'/'+d.slice(5,7):'';
+const dmy=d=>d?d.slice(8,10)+'/'+d.slice(5,7)+'/'+d.slice(0,4):'';
+const nbvOf=f=>f.nbv==null||f.nbv===''?1:num(f.nbv);
+const pilotMin=f=>MAIN.reduce((a,c)=>a+num(f[c]),0);
+/* Corrections de report : écarts de calcul du carnet papier reproduits à l'identique.
+   corr : compte dans les totaux à partir de la ligne ; corrRep : compte seulement à partir des reports de la page suivante. */
+const sn=v=>{const n=Math.round(Number(v));return Number.isFinite(n)?n:0};
+const CK=[...ALL,'arr','att','eqm'];
+function sumCols(list,samePage){const o={arr:0,att:0,eqm:0};ALL.forEach(c=>o[c]=0);list.forEach(f=>{ALL.forEach(c=>o[c]+=num(f[c]));o.arr+=num(f.arr);o.att+=num(f.att);o.eqm+=num(f.eqm);
+  if(f.corr)CK.forEach(c=>o[c]+=sn(f.corr[c]));
+  if(f.corrRep&&!(samePage&&samePage.has(f)))CK.forEach(c=>o[c]+=sn(f.corrRep[c]));});return o}
+/* Vol tel que compté dans les totaux (valeurs de la ligne + corrections) */
+function counted(f){if(!f.corr&&!f.corrRep)return f;const o={...f};[f.corr,f.corrRep].forEach(k=>{if(k)CK.forEach(c=>{if(k[c]!=null)o[c]=Math.max(0,num(o[c])+sn(k[c]))})});return o}
+/* Colonne Simulation : temps de simulation, ou nombre d'atterrissages (ATT) quand le carnet l'utilise ainsi */
+const leftCell=(c,o)=>fmt(o[c]);
+const simCell=(m,att)=>[fmt(m),num(att)?String(num(att)):''].filter(Boolean).join(' ');
+const sortKey=f=>(f.date||'')+'|'+String(f.ord||0).padStart(15,'0');
+const sortList=l=>l.sort((a,b)=>sortKey(a)<sortKey(b)?-1:sortKey(a)>sortKey(b)?1:0);
+function toast(t){const el=document.createElement('div');el.className='toast';el.textContent=t;document.body.append(el);setTimeout(()=>el.remove(),3200)}
+
+/* ---------- Stockage local (cache) ---------- */
+function saveLocal(){try{localStorage.setItem(CACHE,JSON.stringify({avion:S.avion,drone:S.drone,settings:S.settings}))}catch(e){}}
+function loadLocal(){try{const c=JSON.parse(localStorage.getItem(CACHE)||'null');if(c){S.avion=sortList(c.avion||[]);S.drone=sortList(c.drone||[]);S.settings={...DEF_SETTINGS,...(c.settings||{})}}}catch(e){}}
+
+/* ---------- Synchronisation ---------- */
+let wq=Promise.resolve();
+function queue(fn){wq=wq.then(fn).catch(e=>toast("Échec de l'enregistrement ("+(e&&e.code||'erreur')+"). Réessayez.")).then(()=>{});return wq}
+const yearOf=f=>(f.date||'0000').slice(0,4);
+function writeYears(kind,years){
+  saveLocal();
+  if(S.mode!=='sync')return Promise.resolve();
+  // Contenu figé au moment de la modification : une mise à jour reçue entre-temps ne peut pas l'écraser
+  const jobs=[...new Set(years)].map(y=>[y,JSON.parse(JSON.stringify(S[kind].filter(f=>yearOf(f)===y)))]);
+  return queue(async()=>{
+    for(const [y,vols] of jobs){
+      const ref=BASE.collection(kind).doc('y'+y);
+      if(vols.length)await ref.set({vols});else await ref.delete();
+    }
+  });
+}
+function setSync(t){$('#sync').textContent=t}
+
+/* ====== Configuration Firebase : à remplir avec celle de ton projet ====== */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyB2HDJOgr-xvWLAlO30p3D93b7-cihpISw",
+  authDomain: "carnets-de-vol-5fd9a.firebaseapp.com",
+  projectId: "carnets-de-vol-5fd9a",
+  storageBucket: "carnets-de-vol-5fd9a.firebasestorage.app",
+  messagingSenderId: "439768331533",
+  appId: "1:439768331533:web:3fc7e789fd8bd574446c44"
+};
+let AUTH=null,UNSUB=[];
+function init(){
+  loadLocal();render();
+  if(!window.firebase||FIREBASE_CONFIG.apiKey==='A_REMPLIR'){goLocal();return}
+  firebase.initializeApp(FIREBASE_CONFIG);
+  DB=firebase.firestore();
+  try{DB.settings({ignoreUndefinedProperties:true})}catch(e){}
+  DB.enablePersistence({synchronizeTabs:true}).catch(()=>{});
+  AUTH=firebase.auth();
+  AUTH.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(()=>{});
+  AUTH.onAuthStateChanged(u=>{UNSUB.forEach(f=>f());UNSUB=[];
+    if(!u){S.mode='local';setSync('Non connecté');$('#d-login').open||$('#d-login').showModal();return}
+    $('#d-login').open&&$('#d-login').close();
+    $('#acct').textContent='Connecté : '+u.email;
+    BASE=DB.collection('users').doc(u.uid);
+    S.mode='sync';$('#local-banner').hidden=true;setSync('Synchronisation…');
+    const onErr=()=>setSync('Synchronisation interrompue');
+    const listen=kind=>BASE.collection(kind).onSnapshot({includeMetadataChanges:true},qs=>{
+      const all=[];qs.docs.forEach(d=>{const v=d.data();if(v&&Array.isArray(v.vols))all.push(...v.vols)});
+      S[kind]=sortList(all);saveLocal();render();
+      setSync(qs.metadata.hasPendingWrites?'Enregistré sur l\'appareil, envoi en cours…':qs.metadata.fromCache?'Hors ligne, enregistré sur l\'appareil':'Synchronisé');
+    },onErr);
+    UNSUB.push(listen('avion'),listen('drone'));
+    UNSUB.push(BASE.onSnapshot(s=>{if(s.exists){const v=s.data();S.settings={...DEF_SETTINGS,...(v.settings||{})};saveLocal()}},onErr));
+  });
+}
+const fl=$('#fl');
+const authErr=e=>({'auth/invalid-credential':'Adresse ou mot de passe incorrect.','auth/wrong-password':'Mot de passe incorrect.','auth/user-not-found':'Aucun compte avec cette adresse : touche « Créer mon compte ».','auth/email-already-in-use':'Un compte existe déjà avec cette adresse : touche « Se connecter ».','auth/weak-password':'Le mot de passe doit faire au moins 6 caractères.','auth/network-request-failed':'Pas de connexion internet.','auth/invalid-email':'Adresse mail invalide.'}[e.code]||('Erreur : '+e.code));
+fl.onsubmit=e=>{e.preventDefault();$('#fl-err').textContent='';AUTH.signInWithEmailAndPassword(fl.elements.email.value.trim(),fl.elements.pwd.value).catch(e=>$('#fl-err').textContent=authErr(e))};
+$('#fl-create').onclick=()=>{if(!fl.reportValidity())return;AUTH.createUserWithEmailAndPassword(fl.elements.email.value.trim(),fl.elements.pwd.value).catch(e=>$('#fl-err').textContent=authErr(e))};
+$('#fl-reset').onclick=()=>{const m=fl.elements.email.value.trim();if(!m){$('#fl-err').textContent='Indique ton adresse mail d\'abord.';return}AUTH.sendPasswordResetEmail(m).then(()=>$('#fl-err').textContent='Un mail de réinitialisation t\'a été envoyé.').catch(e=>$('#fl-err').textContent=authErr(e))};
+$('#logout').onclick=()=>{AUTH&&AUTH.signOut();$('#d-save').close()};
+function goLocal(){S.mode='local';setSync('Sur cet appareil (non configuré)');$('#local-banner').hidden=false}
+
+/* ---------- Rendu carnet avion ---------- */
+function spreadHTML(F,k,interactive){
+  const start=k*LINES,rows=F.slice(start,start+LINES);
+  const rep=sumCols(F.slice(0,start)),pg=sumCols(rows),tot=sumCols(F.slice(0,start+rows.length),new Set(rows));
+  const years=[...new Set(rows.filter(f=>!f.blank).map(yearOf))].filter(y=>y!=='0000');
+  const totPil=MAIN.reduce((a,c)=>a+tot[c],0)+rows.reduce((a,f)=>a+sn(f.corrTG),0)+F.slice(0,start+rows.length).reduce((a,f)=>a+sn(f.corrTGc),0);
+  const useAtt=tot.att>0||F.slice(start+LINES).some(f=>num(f.att));
+  let L='',R='';
+  for(let i=0;i<LINES;i++){
+    const f=rows[i];
+    const at=f?(interactive?` data-id="${f.id}"`:''):(interactive&&i===rows.length?' data-new':'');
+    L+=`<tr class="ln"${at}><td>${f&&!f.blank?dm(f.date):''}</td><td>${esc(f?.type)}</td><td>${esc(f?.immat)}</td><td>${esc(f?.fonction)}</td><td>${esc(f?.nature)}</td>${LEFT.map(c=>`<td class="n">${f?leftCell(c,f):''}</td>`).join('')}</tr>`;
+    R+=`<tr class="ln"${at}>${RIGHT.map(c=>`<td class="n">${f?(c==='sim'?simCell(f.sim,f.att):fmt(f[c])):''}</td>`).join('')}<td class="n">${f&&num(f.arr)?num(f.arr):''}</td><td class="obs">${f&&f.sig?`<img alt="Visa" src="${f.sig}">`:''}${esc(f?.obs)}</td></tr>`;
+  }
+  const cg=(ws)=>'<colgroup>'+ws.map(w=>`<col style="width:${w}px">`).join('')+'</colgroup>';
+  const repL=LEFT.map(c=>`<td>${leftCell(c,rep)}</td>`).join('');
+  const repR=RIGHT.map(c=>`<td>${c==='sim'?simCell(rep.sim,rep.att):fmt(rep[c])}</td>`).join('')+`<td>${rep.arr||''}</td>`;
+  const left=`<div class="pg pg-l"><span class="num">${2*k+6}</span>
+  <div class="year">ANNÉE<i>${years.join('/')}</i></div>
+  <table class="cv">${cg([50,52,66,50,150,44,44,54,58,54,58])}
+  <tr><th rowspan="4">Date</th><th colspan="2">Aéronef</th><th rowspan="4">Fonction<br>à<br>bord</th><th rowspan="4" class="nat">Nature du vol<em>Reports ➡</em></th><th colspan="2" rowspan="2">Membre<br>d'équipage</th><th colspan="4">Pilote monomoteurs</th></tr>
+  <tr><th rowspan="3" class="sm">TYPE</th><th rowspan="3" class="sm">IMMATRI-<br>CULATION</th><th colspan="2">Jour</th><th colspan="2">Nuit</th></tr>
+  <tr><th class="sm">JOUR</th><th class="sm">NUIT</th><th class="sm">Double</th><th class="sm">Cdt de bord</th><th class="sm">Double</th><th class="sm">Cdt de bord</th></tr>
+  <tr class="rep">${repL}</tr>
+  ${L}
+  <tr class="tot"><td colspan="5" class="lab">Totaux à reporter ➡</td>${LEFT.map(c=>`<td class="n">${leftCell(c,tot)}</td>`).join('')}</tr>
+  </table>
+  <div class="tg">Total général des heures de vol comme pilote : <i>${Math.floor(totPil/60)}</i> heures <i>${totPil%60}</i> minutes</div></div>`;
+  const right=`<div class="pg pg-r"><span class="num">${2*k+7}</span><div class="year"></div>
+  <table class="cv">${cg([50,56,56,50,56,56,54,52,54,24,230])}
+  <tr><th colspan="6">Pilote multimoteurs</th><th colspan="2" rowspan="2">Vols aux<br>instruments (1)</th><th rowspan="3">Simu-<br>lation${useAtt?'<br><i style="font-family:Kalam,cursive;font-style:normal;color:var(--ink,#1c3b98);font-size:13px;text-transform:none">Att</i>':''}</th><th rowspan="3" class="vert">Arrivées IFR</th><th rowspan="4">Observations et visa<br>de l'autorité habilitée<br>ou de l'instructeur</th></tr>
+  <tr><th colspan="3">Jour</th><th colspan="3">Nuit</th></tr>
+  <tr><th class="sm">Double</th><th class="sm">Cdt de bord</th><th class="sm">Co-pilote</th><th class="sm">Double</th><th class="sm">Cdt de bord</th><th class="sm">Co-pilote</th><th class="sm">Double</th><th class="sm">Pilote</th></tr>
+  <tr class="rep">${repR}</tr>
+  ${R}
+  <tr class="tot">${RIGHT.map(c=>`<td class="n">${c==='sim'?simCell(tot.sim,tot.att):fmt(tot[c])}</td>`).join('')}<td class="n">${tot.arr||''}</td><td class="foot">(1) Ces heures sont comprises dans les heures de vol PILOTE</td></tr>
+  </table><div class="tg">&nbsp;</div></div>`;
+  return `<div class="spread">${left}${right}</div>`;
+}
+
+/* Totaux à reporter de la dernière page, exactement comme sur le carnet */
+function carnetTotals(F){
+  const n=Math.max(1,Math.ceil(F.length/LINES)),start=(n-1)*LINES,rows=F.slice(start);
+  const tot=sumCols(F,new Set(rows));
+  const tg=MAIN.reduce((a,c)=>a+tot[c],0)+rows.reduce((a,f)=>a+sn(f.corrTG),0)+F.reduce((a,f)=>a+sn(f.corrTGc),0);
+  return{tot,tg};
+}
+function renderAvion(){
+  const F=S.avion,n=Math.max(1,Math.ceil((F.length+ (F.length%LINES===0&&F.length?0:0))/LINES));
+  if(S.spread==null||S.spread>n-1)S.spread=n-1;
+  $('#av-pos').textContent=`Page ${S.spread+1} sur ${n}`;
+  $('#av-prev').disabled=$('#av-first').disabled=S.spread===0;
+  $('#av-next').disabled=$('#av-last').disabled=S.spread>=n-1;
+  $('#spread').innerHTML=spreadHTML(F,S.spread,true);
+  const FR=F.filter(f=>!f.blank);
+  const T=carnetTotals(F),last=FR[FR.length-1];
+  const box=(v,l)=>`<div class="stat"><b>${v}</b><span>${l}</span></div>`;
+  $('#av-stats').innerHTML=box(fmtLong(T.tg),'Total général (carnet)')+box(fmtLong(T.tot.mjd),'Double jour')+box(fmtLong(T.tot.mjc),'Cdt de bord jour')+
+    box(fmtLong(T.tot.mnd),'Double nuit')+box(fmtLong(T.tot.mnc),'Cdt de bord nuit')+box(T.tot.att,'Atterrissages')+box(FR.length,'Vols')+box(last?dmy(last.date):'—','Dernier vol');
+  fillLists();
+}
+
+/* ---------- Rendu registre drone ---------- */
+function registreHTML(F,k,interactive){
+  const st=S.settings,start=k*DLINES,rows=F.slice(start,start+DLINES);
+  const before=F.slice(0,start),upto=F.slice(0,start+rows.length);
+  const sv=l=>l.reduce((a,f)=>a+nbvOf(f),0),sd=l=>l.reduce((a,f)=>a+num(f.duree),0);
+  let B='';
+  for(let i=0;i<DLINES;i++){
+    const f=rows[i];
+    const at=f?(interactive?` data-id="${f.id}"`:''):(interactive&&i===rows.length?' data-new':'');
+    B+=`<tr class="ln"${at}><td class="n">${f?start+i+1:''}</td><td>${f?dmy(f.date):''}</td><td class="n">${esc(f?.heure)}</td><td>${esc(f?.lieu)}</td><td>${esc(f?.appareil)}</td><td>${esc(f?.ident)}</td><td class="n">${esc(f?.cat)}</td><td>${esc(f?.mission)}</td><td class="n">${f?nbvOf(f):''}</td><td class="n">${f?fmt(f.duree):''}</td><td>${esc(f?.obs)}</td></tr>`;
+  }
+  return `<div class="spread"><div class="pg"><span class="num">${k+1}</span>
+  <div class="reg-title">REGISTRE DES VOLS — AÉRONEFS SANS ÉQUIPAGE À BORD</div>
+  <div class="reg-head"><span>Exploitant :<i>${esc(st.exploitant)}</i></span><span>N° d'exploitant :<i>${esc(st.numExploitant)}</i></span><span>Télépilote :<i>${esc(st.nom)}</i></span><span>Certificat :<i>${esc(st.certif)}</i></span></div>
+  <table class="cv"><colgroup>${[34,78,50,170,120,110,70,190,40,56,200].map(w=>`<col style="width:${w}px">`).join('')}</colgroup>
+  <tr><th>N°</th><th>Date</th><th>Heure</th><th>Lieu</th><th>Appareil</th><th>Identifiant</th><th>Catégorie</th><th>Mission / client</th><th>Vols</th><th>Temps</th><th>Observations</th></tr>
+  <tr class="rep"><td colspan="8" style="text-align:right;font-family:'Barlow Condensed',Arial,sans-serif;font-style:italic;font-size:11px;color:var(--print,#3d3960)">Reports ➡</td><td>${before.length?sv(before):''}</td><td>${fmt(sd(before))}</td><td></td></tr>
+  ${B}
+  <tr class="tot"><td colspan="8" class="lab">Totaux à reporter ➡</td><td class="n">${sv(upto)||''}</td><td class="n">${fmt(sd(upto))}</td><td></td></tr>
+  </table></div></div>`;
+}
+function renderDrone(){
+  const F=S.drone,n=Math.max(1,Math.ceil(F.length/DLINES));
+  if(S.dpage==null||S.dpage>n-1)S.dpage=n-1;
+  $('#dr-pos').textContent=`Page ${S.dpage+1} sur ${n}`;
+  $('#dr-prev').disabled=$('#dr-first').disabled=S.dpage===0;
+  $('#dr-next').disabled=$('#dr-last').disabled=S.dpage>=n-1;
+  $('#registre').innerHTML=registreHTML(F,S.dpage,true);
+  const tot=F.reduce((a,f)=>a+num(f.duree),0),nb=F.reduce((a,f)=>a+nbvOf(f),0);
+  const byCat={};F.forEach(f=>{byCat[f.cat||'—']=(byCat[f.cat||'—']||0)+num(f.duree)});
+  $('#dr-stats').innerHTML=`<div class="stat"><b>${fmtLong(tot)}</b><span>Temps de vol</span></div><div class="stat"><b>${nb}</b><span>Vols</span></div>`+
+    Object.keys(byCat).sort().map(c=>`<div class="stat"><b>${fmtLong(byCat[c])}</b><span>${esc(c)}</span></div>`).join('');
+  fillLists();
+}
+function render(){['avion','drone','stats'].forEach(v=>{$('#v-'+v).hidden=S.view!==v;$('#tab-'+v).setAttribute('aria-pressed',String(S.view===v))});renderAvion();renderDrone();if(S.view==='stats')renderStats()}
+
+function fillLists(){
+  const put=(id,vals)=>{$(id).innerHTML=[...new Set(vals.filter(Boolean).reverse())].slice(0,60).map(v=>`<option value="${esc(v)}">`).join('')};
+  put('#dl-type',S.avion.map(f=>f.type));put('#dl-immat',S.avion.map(f=>f.immat));
+  put('#dl-nature',['LOCAL','NAV','TDP',...S.avion.map(f=>f.nature)]);
+  put('#dl-lieu',S.drone.map(f=>f.lieu));put('#dl-ident',S.drone.map(f=>f.ident));put('#dl-mission',S.drone.map(f=>f.mission));
+  put('#dl-appareil',['DJI Agras T100','DJI Mini 4 Pro',...S.drone.map(f=>f.appareil)]);
+}
+
+/* ---------- Statistiques ---------- */
+function agg(list,keyFn,valFn){const m=new Map();list.forEach(f=>{const k=keyFn(f);if(!k)return;m.set(k,(m.get(k)||0)+valFn(f))});return[...m.entries()]}
+const byVal=e=>e.sort((a,b)=>b[1]-a[1]),byKey=e=>e.sort((a,b)=>a[0]<b[0]?-1:1);
+function bars(title,entries,f=fmtLong,max=12){
+  const list=entries.filter(e=>e[1]>0).slice(0,max);
+  if(!list.length)return'';
+  const top=Math.max(...list.map(e=>e[1]));
+  return`<div class="card"><h3>${esc(title)}</h3>${list.map(([k,v])=>`<div class="bar"><span class="bk" title="${esc(k)}">${esc(k)}</span><span class="bt"><i style="width:${(v/top*100).toFixed(1)}%"></i></span><span class="bv">${f(v)}</span></div>`).join('')}</div>`;
+}
+function kv(title,rows){return`<div class="card"><h3>${esc(title)}</h3><div class="kv">${rows.map(([k,v])=>`<span>${esc(k)}</span><b>${v}</b>`).join('')}</div></div>`}
+const isoDaysAgo=n=>{const d=new Date();d.setDate(d.getDate()-n);return d.toISOString().slice(0,10)};
+const cdbOf=f=>num(f.mjc)+num(f.mnc)+num(f.xjc)+num(f.xnc);
+const dblOf=f=>num(f.mjd)+num(f.mnd)+num(f.xjd)+num(f.xnd);
+const copOf=f=>num(f.xjp)+num(f.xnp);
+const nuitOf=f=>num(f.mnd)+num(f.mnc)+num(f.xnd)+num(f.xnc)+num(f.xnp);
+const monoOf=f=>num(f.mjd)+num(f.mjc)+num(f.mnd)+num(f.mnc);
+const multiOf=f=>pilotMin(f)-monoOf(f);
+const insOf=f=>num(f.ifd)+num(f.ifp);
+function avionStats(F){
+  F=F.filter(f=>!f.blank).map(counted);
+  const n=F.length;
+  const s=(fn,l=F)=>l.reduce((a,f)=>a+fn(f),0);
+  const y12=F.filter(f=>f.date>=isoDaysAgo(365)),d90=F.filter(f=>f.date>=isoDaysAgo(90));
+  const last=F[F.length-1];
+  return{n,
+    total:[['Total général (comme le carnet)',carnetTotals(S.avion).tg],['Heures pilote (somme des vols)',s(pilotMin)],['Commandant de bord',s(cdbOf)],['Double commande',s(dblOf)],['Co-pilote',s(copOf)],['De nuit',s(nuitOf)],['Monomoteur',s(monoOf)],['Multimoteur',s(multiOf)],['Vols aux instruments',s(insOf)],['Simulation',s(f=>num(f.sim))],['Membre d\'équipage',s(f=>num(f.eqj)+num(f.eqn))]],
+    counts:[['Vols',F.length],['Atterrissages notés',s(f=>num(f.att))],['Arrivées IFR',s(f=>num(f.arr))],['Premier vol',F[0]?dmy(F[0].date):'—'],['Dernier vol',last?dmy(last.date):'—'],['Temps moyen par vol',F.length?fmtLong(Math.round(s(pilotMin)/F.length)):'—']],
+    recent:[['Heures pilote, 12 derniers mois',fmtLong(s(pilotMin,y12))],['dont commandant de bord',fmtLong(s(cdbOf,y12))],['dont double commande',fmtLong(s(dblOf,y12))],['Vols, 12 derniers mois',y12.length],['Vols, 90 derniers jours',d90.length],['Heures, 90 derniers jours',fmtLong(s(pilotMin,d90))]],
+    years:byKey(agg(F,yearOf,pilotMin)),
+    types:byVal(agg(F,f=>f.type,pilotMin)),
+    immats:byVal(agg(F,f=>f.immat,pilotMin)),
+    fonctions:byVal(agg(F,f=>f.fonction,pilotMin)),
+    natures:byVal(agg(F,f=>(f.nature||'').toUpperCase(),()=>1)),
+  };
+}
+const isEst=f=>/estimation/i.test(f.cat||'');
+function droneStats(ALLF){
+  const F=ALLF.filter(f=>!isEst(f)),E=ALLF.filter(isEst);
+  const s=(fn,l=F)=>l.reduce((a,f)=>a+fn(f),0),nb=nbvOf,du=f=>num(f.duree);
+  const y12=F.filter(f=>f.date>=isoDaysAgo(365));
+  return{
+    est:[['Temps estimé',fmtLong(s(du,E))],['Vols estimés',s(nb,E)],['Années concernées',E.length?`${yearOf(E[0])} à ${yearOf(E[E.length-1])}`:'—'],['Temps total, estimé compris',fmtLong(s(du,ALLF))],['Vols au total, estimés compris',s(nb,ALLF)]],
+    hasEst:E.length>0,
+    estYears:byKey(agg(E,yearOf,du)),
+    total:[['Temps de vol',fmtLong(s(du))],['Vols',s(nb)],['Jours d\'activité',new Set(F.map(f=>f.date)).size],['Lieux différents',new Set(F.map(f=>f.lieu).filter(Boolean)).size],['Temps, 12 derniers mois',fmtLong(s(du,y12))],['Vols, 12 derniers mois',s(nb,y12)]],
+    cats:byVal(agg(F,f=>f.cat||'Non précisée',du)),
+    apps:byVal(agg(F,f=>f.appareil||'Non précisé',du)),
+    years:byKey(agg(F,yearOf,du)),
+    missions:byVal(agg(F,f=>f.mission,du)),
+    lieux:byVal(agg(F,f=>f.lieu,nb)),
+  };
+}
+function renderStats(){
+  const which=S.statsOf;
+  ['avion','drone'].forEach(k=>$('#st-'+k).setAttribute('aria-pressed',String(which===k)));
+  $('#st-xlsx').textContent=which==='avion'?'Exporter les stats avion en Excel':'Exporter les stats drone en Excel';
+  if(which==='avion'){
+    const A=avionStats(S.avion);
+    $('#stats').innerHTML=`<section class="st-sec"><h2>Carnet de vol avion<small>${A.n} vol${A.n>1?'s':''}</small></h2>`+(S.avion.length?`<div class="st-grid">
+    ${kv('Totaux',A.total.map(([k,v])=>[k,fmtLong(v)]))}
+    ${kv('Activité',A.counts)}
+    ${kv('Activité récente',A.recent)}
+    ${bars('Heures pilote par année',A.years,fmtLong,60)}
+    ${bars('Par type d\'avion',A.types)}
+    ${bars('Par immatriculation',A.immats)}
+    ${bars('Par fonction à bord',A.fonctions)}
+    ${bars('Nature du vol (nombre de vols)',A.natures,v=>v+' vol'+(v>1?'s':''))}
+    </div>`:'<p class="empty">Aucun vol avion pour le moment.</p>')+'</section>';
+  }else{
+    const D=droneStats(S.drone),rec=S.drone.filter(f=>!isEst(f)).length;
+    $('#stats').innerHTML=`<section class="st-sec"><h2>Registre drone<small>${rec} ligne${rec>1?'s':''} de vols enregistrés</small></h2>`+(rec?`<div class="st-grid">
+    ${kv('Vols enregistrés',D.total)}
+    ${bars('Par catégorie',D.cats)}
+    ${bars('Par appareil',D.apps)}
+    ${bars('Par année',D.years,fmtLong,60)}
+    ${bars('Par mission ou client',D.missions)}
+    ${bars('Lieux (nombre de vols)',D.lieux,v=>v+' vol'+(v>1?'s':''))}
+    </div>`:'<p class="empty">Aucun vol drone enregistré pour le moment.</p>')+
+    (D.hasEst?`<h2 style="margin-top:6px">Expérience antérieure estimée<small>hors vols enregistrés</small></h2><div class="st-grid">${kv('Estimations',D.est)}${bars('Temps estimé par année',D.estYears,fmtLong,60)}</div>`:'')+'</section>';
+  }
+}
+
+/* ---------- Export Excel ---------- */
+function loadXLSX(){
+  if(window.XLSX)return Promise.resolve(window.XLSX);
+  return new Promise((res,rej)=>{const sc=document.createElement('script');sc.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';sc.onload=()=>res(window.XLSX);sc.onerror=()=>rej(new Error('xlsx'));document.head.append(sc)});
+}
+function buildWorkbook(X,avion,drone,settings){
+  avion=avion.filter(f=>!f.blank);
+  const TZ='[h]:mm',DZ='dd/mm/yyyy';
+  const serial=d=>{const[y,m,j]=d.split('-').map(Number);return(Date.UTC(y,m-1,j)-Date.UTC(1899,11,30))/864e5};
+  const T=m=>({t:'n',v:num(m)/1440,z:TZ});
+  const Dt=d=>/^\d{4}-\d{2}-\d{2}$/.test(d||'')?{t:'n',v:serial(d),z:DZ}:{t:'s',v:d||''};
+  const colL=c=>X.utils.encode_col(c);
+  function sheet(rows,widths){
+    const ws={};let maxC=0;
+    rows.forEach((r,ri)=>r.forEach((c,ci)=>{if(c==null||c==='')return;const cell=typeof c==='object'?c:{t:typeof c==='number'?'n':'s',v:c};ws[X.utils.encode_cell({r:ri,c:ci})]=cell;maxC=Math.max(maxC,ci)}));
+    ws['!ref']=X.utils.encode_range({s:{r:0,c:0},e:{r:Math.max(rows.length-1,0),c:maxC}});
+    if(widths)ws['!cols']=widths.map(w=>({wch:w}));
+    return ws;
+  }
+  const wb=X.utils.book_new();
+  const head=['Date','Type','Immatriculation','Fonction à bord','Nature du vol',...ALL.map(c=>LBL[c]),'Arrivées IFR','Atterrissages','Total pilote','Observations'];
+  const nT=ALL.length, firstT=5, arrC=firstT+nT, attC=arrC+1, totC=attC+1;
+  const widths=[11,10,14,10,22,...ALL.map(()=>11),9,9,11,30];
+  // Récapitulatif par année (formules vers les onglets annuels)
+  const years=[...new Set(avion.map(yearOf))].sort();
+  const recap=[['Carnet de vol avion : '+(settings.nom||''),],['Année','Vols','Total pilote','Cdt de bord','Double','Co-pilote','Nuit','Instruments','Simulation','Arrivées IFR']];
+  years.forEach(y=>{
+    const L=avion.filter(f=>yearOf(f)===y),sh="'"+y+"'",tr=L.length+2;
+    const ref=c=>`${sh}!${colL(c)}${tr}`;
+    const idx=k=>firstT+ALL.indexOf(k);
+    const sumOf=ks=>ks.map(k=>ref(idx(k))).join('+');
+    const v=fn=>L.reduce((a,f)=>a+fn(f),0)/1440;
+    recap.push([{t:'n',v:+y},{t:'n',v:L.length,f:`COUNTA(${sh}!A2:A${L.length+1})`},
+      {t:'n',v:v(pilotMin),f:ref(totC),z:TZ},
+      {t:'n',v:v(cdbOf),f:sumOf(['mjc','mnc','xjc','xnc']),z:TZ},
+      {t:'n',v:v(dblOf),f:sumOf(['mjd','mnd','xjd','xnd']),z:TZ},
+      {t:'n',v:v(copOf),f:sumOf(['xjp','xnp']),z:TZ},
+      {t:'n',v:v(nuitOf),f:sumOf(['mnd','mnc','xnd','xnc','xnp']),z:TZ},
+      {t:'n',v:v(insOf),f:sumOf(['ifd','ifp']),z:TZ},
+      {t:'n',v:v(f=>num(f.sim)),f:ref(idx('sim')),z:TZ},
+      {t:'n',v:L.reduce((a,f)=>a+num(f.arr),0),f:ref(arrC)}]);
+  });
+  if(years.length){
+    const last=recap.length,row=['Total'];
+    for(let c=1;c<=9;c++){const vals=recap.slice(2).map(r=>r[c].v).reduce((a,b)=>a+b,0);row.push({t:'n',v:vals,f:`SUM(${colL(c)}3:${colL(c)}${last})`,z:(c>=2&&c<=8)?TZ:undefined})}
+    recap.push(row);
+  }
+  if(avion.length)X.utils.book_append_sheet(wb,sheet(recap,[10,8,12,12,12,12,12,12,12,12]),'Récapitulatif avion');
+  // Un onglet par année
+  years.forEach(y=>{
+    const L=avion.filter(f=>yearOf(f)===y);
+    const rows=[head];
+    L.forEach((f,i)=>{const r=i+2;rows.push([Dt(f.date),f.type||'',f.immat||'',f.fonction||'',f.nature||'',...ALL.map(c=>num(f[c])?T(f[c]):''),num(f.arr)?{t:'n',v:num(f.arr)}:'',num(f.att)?{t:'n',v:num(f.att)}:'',
+      {t:'n',v:pilotMin(f)/1440,f:MAIN.map(k=>colL(firstT+ALL.indexOf(k))+r).join('+'),z:TZ},f.obs||'']);});
+    const n=L.length+1,tot=['Total '+y,'','','',''];
+    ALL.forEach((c,i)=>{const col=colL(firstT+i);tot.push({t:'n',v:L.reduce((a,f)=>a+num(f[c]),0)/1440,f:`SUM(${col}2:${col}${n})`,z:TZ})});
+    tot.push({t:'n',v:L.reduce((a,f)=>a+num(f.arr),0),f:`SUM(${colL(arrC)}2:${colL(arrC)}${n})`});
+    tot.push({t:'n',v:L.reduce((a,f)=>a+num(f.att),0),f:`SUM(${colL(attC)}2:${colL(attC)}${n})`});
+    tot.push({t:'n',v:L.reduce((a,f)=>a+pilotMin(f),0)/1440,f:`SUM(${colL(totC)}2:${colL(totC)}${n})`,z:TZ});
+    rows.push(tot);
+    X.utils.book_append_sheet(wb,sheet(rows,widths),y);
+  });
+  // Répartitions avion
+  const A=avionStats(avion);
+  const rep=[['Par type d\'avion','Total pilote'],...A.types.map(([k,v])=>[k,T(v)]),[],['Par immatriculation','Total pilote'],...A.immats.map(([k,v])=>[k,T(v)]),[],['Par fonction à bord','Total pilote'],...A.fonctions.map(([k,v])=>[k,T(v)])];
+  if(avion.length)X.utils.book_append_sheet(wb,sheet(rep,[26,14]),'Répartitions avion');
+  // Drone
+  if(drone.length){
+    const dh=['N°','Date','Heure','Lieu','Appareil','Identifiant','Catégorie','Mission / client','Vols','Temps','Observations'];
+    const rows=[dh];drone.forEach((f,i)=>rows.push([{t:'n',v:i+1},Dt(f.date),f.heure||'',f.lieu||'',f.appareil||'',f.ident||'',f.cat||'',f.mission||'',{t:'n',v:nbvOf(f)},T(f.duree),f.obs||'']));
+    const n=drone.length+1;
+    rows.push(['Total','','','','','','','',{t:'n',v:drone.reduce((a,f)=>a+nbvOf(f),0),f:`SUM(I2:I${n})`},{t:'n',v:drone.reduce((a,f)=>a+num(f.duree),0)/1440,f:`SUM(J2:J${n})`,z:TZ},'']);
+    X.utils.book_append_sheet(wb,sheet(rows,[5,11,7,24,18,16,11,26,6,9,30]),'Registre drone');
+    const D=droneStats(drone);
+    const block=(t,e)=>[[t,'Temps'],...e.map(([k,v])=>[k,T(v)]),[]];
+    const ds=[['Exploitant',settings.exploitant||''],['Télépilote',settings.nom||''],[],...block('Par catégorie',D.cats),...block('Par appareil',D.apps),...block('Par année',D.years),...block('Par mission ou client',D.missions),...(D.hasEst?block('Expérience antérieure estimée (hors vols enregistrés)',D.estYears):[])];
+    X.utils.book_append_sheet(wb,sheet(ds,[28,12]),'Statistiques drone');
+  }
+  return wb;
+}
+async function exportXlsx(btn,only){
+  btn.disabled=true;const txt=btn.textContent;btn.textContent='Préparation…';
+  try{
+    const X=await loadXLSX();
+    const wb=buildWorkbook(X,only==='drone'?[]:S.avion,only==='avion'?[]:S.drone,S.settings);
+    if(!wb.SheetNames.length){toast('Aucun vol à exporter pour ce carnet');return}
+    const data=X.write(wb,{bookType:'xlsx',type:'array'});
+    const fname=only==='avion'?'carnet-avion':only==='drone'?'registre-drone':'carnets-de-vol';
+    await save(`${fname}-${stamp()}.xlsx`,new Blob([data],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+  }catch(e){toast("Impossible de préparer le fichier Excel. Vérifiez la connexion et réessayez.")}
+  finally{btn.disabled=false;btn.textContent=txt}
+}
+
+/* ---------- Navigation ---------- */
+['avion','drone','stats'].forEach(v=>$('#tab-'+v).onclick=()=>{S.view=v;render()});
+$('#av-first').onclick=()=>{S.spread=0;renderAvion()};$('#av-prev').onclick=()=>{S.spread--;renderAvion()};
+$('#av-next').onclick=()=>{S.spread++;renderAvion()};$('#av-last').onclick=()=>{S.spread=1e9;renderAvion()};
+$('#dr-first').onclick=()=>{S.dpage=0;renderDrone()};$('#dr-prev').onclick=()=>{S.dpage--;renderDrone()};
+$('#dr-next').onclick=()=>{S.dpage++;renderDrone()};$('#dr-last').onclick=()=>{S.dpage=1e9;renderDrone()};
+document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>b.closest('dialog').close());
+$('#spread').onclick=e=>{const tr=e.target.closest('tr.ln');if(!tr)return;if(tr.dataset.id)openAvion(tr.dataset.id);else if(tr.hasAttribute('data-new'))openAvion(null)};
+$('#registre').onclick=e=>{const tr=e.target.closest('tr.ln');if(!tr)return;if(tr.dataset.id)openDrone(tr.dataset.id);else if(tr.hasAttribute('data-new'))openDrone(null)};
+$('#av-add').onclick=()=>openAvion(null);$('#dr-add').onclick=()=>openDrone(null);
+
+/* ---------- Signature ---------- */
+const cv=$('#sig'),cx=cv.getContext('2d');let sigDirty=false,sigHas=false,drawing=false;
+function sigReset(){cx.clearRect(0,0,cv.width,cv.height);sigDirty=false;sigHas=false}
+function pos(e){const r=cv.getBoundingClientRect();return[(e.clientX-r.left)*cv.width/r.width,(e.clientY-r.top)*cv.height/r.height]}
+cv.addEventListener('pointerdown',e=>{drawing=true;cv.setPointerCapture(e.pointerId);const[x,y]=pos(e);cx.beginPath();cx.moveTo(x,y);cx.lineWidth=3.2;cx.lineCap='round';cx.lineJoin='round';cx.strokeStyle='#1c3b98'});
+cv.addEventListener('pointermove',e=>{if(!drawing)return;const[x,y]=pos(e);cx.lineTo(x,y);cx.stroke();sigDirty=true;sigHas=true});
+cv.addEventListener('pointerup',()=>drawing=false);cv.addEventListener('pointercancel',()=>drawing=false);
+$('#sig-clear').onclick=()=>{sigReset();sigDirty=true};
+function sigData(){
+  if(!sigHas)return'';
+  const o=document.createElement('canvas');o.width=240;o.height=88;o.getContext('2d').drawImage(cv,0,0,240,88);return o.toDataURL('image/png');
+}
+
+/* ---------- Formulaire avion ---------- */
+let editA=null;
+const fa=$('#fa');
+$('#fa-detail-grid').innerHTML=MAIN.map(c=>`<label class="f">${LBL[c]}<input name="d_${c}" placeholder="0h00"></label>`).join('');
+function syncCop(){const multi=fa.elements.mot.value==='x';const cop=fa.querySelector('input[name=role][value=p]');cop.disabled=!multi;if(!multi&&cop.checked)fa.querySelector('input[name=role][value=c]').checked=true}
+fa.querySelectorAll('input[name=mot]').forEach(r=>r.onchange=syncCop);
+$('#fa-detail-toggle').onchange=e=>{$('#fa-detail').hidden=!e.target.checked;$('#fa-quick').hidden=e.target.checked};
+/* Avions connus : immatriculation -> type et motorisation, d'après l'historique */
+const normImmat=v=>{v=String(v||'').trim().toUpperCase().replace(/\s+/g,'');return /^[A-Z]{5}$/.test(v)?v[0]+'-'+v.slice(1):v};
+const immatKey=v=>String(v||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+function knownPlanes(){
+  const m=new Map();
+  for(let i=S.avion.length-1;i>=0;i--){const f=S.avion[i],k=immatKey(f.immat);if(!k||m.has(k))continue;m.set(k,{immat:f.immat,type:f.type||'',mot:multiOf(f)>0?'x':'m'})}
+  return m;
+}
+function applyPlane(p){
+  const E=fa.elements;E.immat.value=p.immat;if(p.type)E.type.value=p.type;
+  fa.querySelector(`input[name=mot][value=${p.mot}]`).checked=true;syncCop();markPlane();
+}
+function markPlane(){const k=immatKey(fa.elements.immat.value);$('#fa-planes').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.k===k)))}
+function renderPlanes(){
+  const planes=[...knownPlanes().entries()].slice(0,8);
+  $('#fa-planes').innerHTML=planes.map(([k,p])=>`<button type="button" data-k="${esc(k)}" aria-pressed="false"><b>${esc(p.immat)}</b>${p.type?`<span>${esc(p.type)}</span>`:''}</button>`).join('');
+  $('#fa-planes').querySelectorAll('button').forEach(b=>b.onclick=()=>applyPlane(knownPlanes().get(b.dataset.k)));
+}
+fa.elements.immat.addEventListener('change',()=>{
+  const E=fa.elements;E.immat.value=normImmat(E.immat.value);
+  const p=knownPlanes().get(immatKey(E.immat.value));if(p)applyPlane(p);else markPlane();
+});
+fa.elements.immat.addEventListener('input',()=>{const p=knownPlanes().get(immatKey(fa.elements.immat.value));if(p&&fa.elements.immat.value.length>=5)applyPlane(p);else markPlane()});
+function openAvion(id){
+  const f=id?S.avion.find(x=>x.id===id):null;editA=f;fa.reset();sigReset();
+  $('#fa-title').textContent=f?'Modifier le vol':'Nouveau vol avion';$('#fa-del').hidden=!f;
+  const prev=S.avion[S.avion.length-1];
+  const v=f||{date:new Date().toISOString().slice(0,10),type:prev?.type||'',immat:prev?.immat||'',fonction:prev?.fonction||'CDB',nature:'LOCAL'};
+  ['date','type','immat','fonction','nature','obs'].forEach(k=>fa.elements[k].value=v[k]||'');
+  ['eqj','eqn','ifd','ifp','sim'].forEach(k=>fa.elements[k].value=fmt(v[k]));fa.elements.arr.value=num(v.arr)||'';fa.elements.att.value=num(v.att)||'';
+  const used=MAIN.filter(c=>num(v[c]));
+  MAIN.forEach(c=>fa.elements['d_'+c].value=fmt(v[c]));
+  const detail=used.length>1;$('#fa-detail-toggle').checked=detail;$('#fa-detail').hidden=!detail;$('#fa-quick').hidden=detail;
+  if(used.length===1){const c=used[0];fa.elements.dur.value=fmt(v[c]);fa.querySelector(`input[name=mot][value=${c[0]}]`).checked=true;fa.querySelector(`input[name=per][value=${c[1]}]`).checked=true;fa.querySelector(`input[name=role][value=${c[2]}]`).checked=true}
+  syncCop();renderPlanes();markPlane();
+  {const parts=[];[['corr',''],['corrRep',' (à partir de la page suivante)']].forEach(([k,lab])=>{if(f&&f[k])Object.entries(f[k]).forEach(([c,n])=>parts.push(`${LBL[c]||(c==='att'?'Atterrissages':c==='arr'?'Arrivées IFR':c)} ${n>0?'+':''}${['att','arr'].includes(c)?n:(n<0?'-':'')+fmt(Math.abs(n))}${lab}`))});
+   if(f&&f.corrTGc)parts.push('Total général, à partir de cette page '+(f.corrTGc>0?'+':'-')+fmt(Math.abs(f.corrTGc)));
+   if(f&&f.corrTG)parts.push('Total général de la page '+(f.corrTG>0?'+':'-')+fmt(Math.abs(f.corrTG)));
+   $('#fa-corr').hidden=!parts.length;$('#fa-corr').textContent=parts.length?'Correction de report reprise du carnet papier : '+parts.join(', ')+'.':'';}
+  if(!f){const p=knownPlanes().get(immatKey(v.immat));if(p)fa.querySelector(`input[name=mot][value=${p.mot}]`).checked=true;syncCop()}
+  $('#fa-more').open=['eqj','eqn','ifd','ifp','sim','arr','att'].some(k=>num(v[k]));
+  if(f&&f.sig){const im=new Image();im.onload=()=>{cx.drawImage(im,0,0,cv.width,cv.height);sigHas=true};im.src=f.sig}
+  $('#d-avion').showModal();
+}
+fa.onsubmit=e=>{
+  e.preventDefault();
+  const o={id:editA?.id||uid(),ord:editA?.ord||Date.now(),date:fa.elements.date.value,type:fa.elements.type.value.trim(),immat:normImmat(fa.elements.immat.value),fonction:fa.elements.fonction.value.trim(),nature:fa.elements.nature.value.trim(),obs:fa.elements.obs.value.trim()};
+  const bad=[];
+  const rd=(name,key)=>{const m=parseDur(fa.elements[name].value);if(Number.isNaN(m))bad.push(key);else if(m)o[key]=m};
+  ['eqj','eqn','ifd','ifp','sim'].forEach(k=>rd(k,k));
+  if($('#fa-detail-toggle').checked)MAIN.forEach(c=>rd('d_'+c,c));
+  else{const m=parseDur(fa.elements.dur.value);if(Number.isNaN(m))bad.push('durée');else if(m)o[fa.elements.mot.value+fa.elements.per.value+fa.elements.role.value]=m}
+  if(num(fa.elements.arr.value))o.arr=num(fa.elements.arr.value);if(num(fa.elements.att.value))o.att=num(fa.elements.att.value);
+  if(editA&&editA.blank&&!pilotMin(o)&&!o.type&&!o.immat)o.blank=true;
+  if(bad.length){toast('Durée illisible : écrivez par exemple 1h05 ou 52');return}
+  if(!o.date){toast('Indiquez la date du vol');return}
+  o.sig=sigDirty?sigData():(editA?.sig||'');if(!o.sig)delete o.sig;
+  if(editA?.corr)o.corr=editA.corr;if(editA?.corrRep)o.corrRep=editA.corrRep;if(editA?.corrTG)o.corrTG=editA.corrTG;if(editA?.corrTGc)o.corrTGc=editA.corrTGc;
+  const years=[yearOf(o)];
+  if(editA){years.push(yearOf(editA));S.avion=S.avion.filter(x=>x.id!==editA.id)}
+  S.avion.push(o);sortList(S.avion);
+  const idx=S.avion.findIndex(x=>x.id===o.id);S.spread=Math.floor(idx/LINES);
+  writeYears('avion',years);renderAvion();$('#d-avion').close();toast(editA?'Vol modifié':'Vol ajouté');
+};
+$('#fa-del').onclick=()=>{
+  if(!editA)return;
+  if($('#fa-del').dataset.arm!=='1'){$('#fa-del').dataset.arm='1';$('#fa-del').textContent='Confirmer la suppression';setTimeout(()=>{$('#fa-del').dataset.arm='';$('#fa-del').textContent='Supprimer'},4000);return}
+  S.avion=S.avion.filter(x=>x.id!==editA.id);writeYears('avion',[yearOf(editA)]);renderAvion();$('#d-avion').close();toast('Vol supprimé');
+};
+
+/* ---------- Formulaire drone ---------- */
+let editD=null;const fd=$('#fd');
+/* Appareils connus, d'après l'historique */
+function knownApps(){
+  const m=new Map();
+  for(let i=S.drone.length-1;i>=0;i--){const f=S.drone[i];if(!f.appareil&&!f.ident)continue;const k=(f.appareil||'')+'|'+(f.ident||'');if(m.has(k))continue;m.set(k,{appareil:f.appareil||'',ident:f.ident||'',cat:f.cat||''})}
+  return m;
+}
+function applyApp(a){const E=fd.elements;E.appareil.value=a.appareil;E.ident.value=a.ident;if(a.cat)E.cat.value=a.cat;markApp()}
+function markApp(){const E=fd.elements,k=E.appareil.value.trim()+'|'+E.ident.value.trim();$('#fd-apps').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.k===k)))}
+function renderApps(){
+  const apps=[...knownApps().entries()].slice(0,8);
+  $('#fd-apps').innerHTML=apps.map(([k,a])=>`<button type="button" data-k="${esc(k)}" aria-pressed="false"><b>${esc(a.appareil||a.ident)}</b>${a.appareil&&a.ident?`<span>${esc(a.ident)}</span>`:''}</button>`).join('');
+  $('#fd-apps').querySelectorAll('button').forEach(b=>b.onclick=()=>applyApp(knownApps().get(b.dataset.k)));
+}
+fd.elements.appareil.addEventListener('change',()=>{
+  const E=fd.elements,name=E.appareil.value.trim().toLowerCase();
+  const a=[...knownApps().values()].find(x=>x.appareil.toLowerCase()===name);
+  if(a&&!E.ident.value.trim())E.ident.value=a.ident;markApp();
+});
+fd.elements.ident.addEventListener('change',()=>{
+  const E=fd.elements,id=E.ident.value.trim().toLowerCase();
+  const a=[...knownApps().values()].find(x=>x.ident&&x.ident.toLowerCase()===id);
+  if(a)E.appareil.value=a.appareil;markApp();
+});
+function openDrone(id){
+  const f=id?S.drone.find(x=>x.id===id):null;editD=f;fd.reset();
+  $('#fd-title').textContent=f?'Modifier le vol':'Nouveau vol drone';$('#fd-del').hidden=!f;
+  const prev=S.drone[S.drone.length-1];
+  const v=f||{date:new Date().toISOString().slice(0,10),appareil:prev?.appareil||'',ident:prev?.ident||'',cat:prev?.cat||'A1',nbv:1};
+  ['date','heure','lieu','appareil','ident','mission','obs'].forEach(k=>fd.elements[k].value=v[k]||'');
+  fd.elements.cat.value=v.cat||'A1';fd.elements.nbv.value=nbvOf(v);fd.elements.duree.value=fmt(v.duree);
+  renderApps();markApp();
+  $('#d-drone').showModal();
+}
+fd.onsubmit=e=>{
+  e.preventDefault();
+  const m=parseDur(fd.elements.duree.value);if(Number.isNaN(m)){toast('Temps illisible : écrivez par exemple 0h25 ou 25');return}
+  const o={id:editD?.id||uid(),ord:editD?.ord||Date.now(),date:fd.elements.date.value,heure:fd.elements.heure.value,lieu:fd.elements.lieu.value.trim(),appareil:fd.elements.appareil.value.trim(),ident:fd.elements.ident.value.trim(),cat:fd.elements.cat.value,nbv:fd.elements.nbv.value===''?1:num(fd.elements.nbv.value),duree:m,mission:fd.elements.mission.value.trim(),obs:fd.elements.obs.value.trim()};
+  const years=[yearOf(o)];
+  if(editD){years.push(yearOf(editD));S.drone=S.drone.filter(x=>x.id!==editD.id)}
+  S.drone.push(o);sortList(S.drone);S.dpage=Math.floor(S.drone.findIndex(x=>x.id===o.id)/DLINES);
+  writeYears('drone',years);renderDrone();$('#d-drone').close();toast(editD?'Vol modifié':'Vol ajouté');
+};
+$('#fd-del').onclick=()=>{
+  if(!editD)return;
+  if($('#fd-del').dataset.arm!=='1'){$('#fd-del').dataset.arm='1';$('#fd-del').textContent='Confirmer la suppression';setTimeout(()=>{$('#fd-del').dataset.arm='';$('#fd-del').textContent='Supprimer'},4000);return}
+  S.drone=S.drone.filter(x=>x.id!==editD.id);writeYears('drone',[yearOf(editD)]);renderDrone();$('#d-drone').close();toast('Vol supprimé');
+};
+
+/* ---------- Import par photo ---------- */
+let impKind='avion',impResults=[],impCtl=null;
+const PROMPT_AVION=hint=>`Tu lis la photo d'une double page d'un carnet de vol avion français (ancien modèle DGAC), écrit à la main.
+Page de gauche, colonnes dans l'ordre : DATE (jj/mm) | AÉRONEF TYPE | IMMATRICULATION | FONCTION À BORD | NATURE DU VOL | MEMBRE D'ÉQUIPAGE jour, nuit | PILOTE MONOMOTEURS jour double, jour cdt de bord, nuit double, nuit cdt de bord.
+Page de droite : PILOTE MULTIMOTEURS jour double, jour cdt de bord, jour co-pilote, nuit double, nuit cdt de bord, nuit co-pilote | VOLS AUX INSTRUMENTS double, pilote | SIMULATION | ARRIVÉES IFR (nombre) | OBSERVATIONS ET VISA.
+En haut de la page de gauche : "ANNÉE" suivie de l'année ou des années (ex. 1999/2000). Les lignes sont chronologiques : quand le mois recule, l'année augmente.${hint?` Si l'année est illisible, la première ligne est en ${hint}.`:''}
+Chaque ligne de la page de gauche correspond à la ligne de même rang sur la page de droite.
+Temps : convertis en minutes entières ("22'" = 22, "0H52" = 52, "1h05" = 65). Case vide = 0.
+Immatriculation au format F-XXXX (ajoute le tiret). Pour OBSERVATIONS, transcris le texte lisible (noms, numéros, initiales) ; mets "visa": true si une signature manuscrite figure sur la ligne.
+Lis aussi la ligne "Reports" (en haut) et "Totaux à reporter" (en bas) si elles sont remplies, sinon null.
+Réponds uniquement avec ce JSON :
+{"annee":"1999/2000","reports":{"mjd":0,...}|null,"totaux":{"mjd":617,...}|null,"vols":[{"date":"1999-09-06","type":"ST 110","immat":"F-GBSU","fonction":"EP","nature":"LOCAL","eqj":0,"eqn":0,"mjd":22,"mjc":0,"mnd":0,"mnc":0,"xjd":0,"xjc":0,"xjp":0,"xnd":0,"xnc":0,"xnp":0,"ifd":0,"ifp":0,"sim":0,"arr":0,"obs":"","visa":true,"doute":false}]}
+Clés des colonnes : eqj eqn mjd mjc mnd mnc xjd xjc xjp xnd xnc xnp ifd ifp sim arr. Mets "doute": true sur une ligne dont une valeur est difficile à lire. N'invente aucune ligne vide.`;
+const PROMPT_DRONE=hint=>`Tu lis une photo ou une capture d'écran de vols de drone : historique de vols de l'application DJI (DJI Fly, DJI Agras, AirData…) ou carnet papier.
+Extrais chaque vol. Réponds uniquement avec ce JSON :
+{"vols":[{"date":"2025-10-14","heure":"14:32","lieu":"","appareil":"","ident":"","cat":"","mission":"","nbv":1,"duree":12,"obs":""}]}
+duree en minutes entières (arrondies). heure au format HH:MM ou "". cat parmi A1, A2, A3, STS-01, STS-02, Spécifique, Formation, ou "" si non indiqué. Laisse "" ce qui n'apparaît pas. N'invente rien.${hint?` Si l'année n'est pas visible, c'est ${hint}.`:''}`;
+
+function openImport(kind){
+  impKind=kind;impResults=[];$('#imp-review').innerHTML='';$('#imp-add').hidden=true;$('#imp-status').textContent='';$('#imp-files').value='';
+  $('#imp-title').textContent=kind==='avion'?'Importer des pages du carnet avion':'Importer des vols drone';
+  $('#imp-help').textContent=kind==='avion'
+    ?"Photographiez chaque double page à plat, bien éclairée, les deux pages entières. Vous pouvez choisir plusieurs photos : elles sont lues une par une, puis vous vérifiez avant d'ajouter."
+    :"Choisissez des captures d'écran de l'historique de vols DJI ou des photos d'un carnet papier. Vous vérifiez avant d'ajouter.";
+  $('#imp-year-wrap').querySelector('input').placeholder=kind==='avion'?'1999':'2025';
+  if(!SAMPLE){$('#imp-status').textContent="La lecture de photos n'est disponible que dans l'application Claude.";$('#imp-run').disabled=true}else $('#imp-run').disabled=false;
+  $('#d-import').showModal();
+}
+$('#av-import').onclick=()=>openImport('avion');$('#dr-import').onclick=()=>openImport('drone');
+
+function shrink(file){return new Promise((res,rej)=>{const url=URL.createObjectURL(file);const im=new Image();im.onload=()=>{const k=Math.min(1,2200/Math.max(im.width,im.height));const c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext('2d').drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(url);c.toBlob(b=>b?res(b):rej(new Error('image')),'image/jpeg',.88)};im.onerror=()=>{URL.revokeObjectURL(url);rej(new Error('image'))};im.src=url})}
+const ERR={not_granted:"Lecture refusée : autorisez Claude à lire les photos pour importer.",rate_limited:'Trop de demandes à la suite : attendez une minute puis relancez.',invalid_json:"La photo n'a pas pu être lue correctement : reprenez-la plus nette et plus à plat.",cancelled:'Lecture arrêtée.'};
+const dupKeyA=f=>f.date+'|'+(f.immat||'').replace(/-/g,'')+'|'+pilotMin(f);
+const dupKeyD=f=>f.date+'|'+(f.heure||'')+'|'+num(f.duree);
+
+$('#imp-stop').onclick=()=>impCtl?.abort();
+$('#imp-run').onclick=async()=>{
+  const files=[...$('#imp-files').files];if(!files.length){toast('Choisissez au moins une photo');return}
+  const hint=$('#imp-year').value.trim();
+  $('#imp-run').disabled=true;$('#imp-stop').hidden=false;
+  const known=new Set(impKind==='avion'?S.avion.map(dupKeyA):S.drone.map(dupKeyD));
+  for(let i=0;i<files.length;i++){
+    $('#imp-status').textContent=`Lecture de la photo ${i+1} sur ${files.length}… (jusqu'à une minute par photo)`;
+    impCtl=new AbortController();
+    try{
+      const blob=await shrink(files[i]);
+      const r=await SAMPLE.json(impKind==='avion'?PROMPT_AVION(hint):PROMPT_DRONE(hint),{images:[blob],signal:impCtl.signal});
+      impResults.push(normalize(r,files[i].name,known,i));
+    }catch(e){
+      impResults.push({name:files[i].name,error:ERR[e.code]||("Lecture impossible ("+(e.code||e.message)+").")});
+      if(['not_granted','rate_limited','cancelled'].includes(e.code))break;
+    }
+    renderReview();
+  }
+  $('#imp-status').textContent='Vérifiez les vols lus, décochez ceux à ne pas ajouter.';
+  $('#imp-run').disabled=false;$('#imp-stop').hidden=true;
+};
+function normalize(r,name,known,fi){
+  const vols=(r&&Array.isArray(r.vols)?r.vols:[]).map((v,i)=>{
+    const o={id:uid(),ord:Date.now()*1+fi*100+i};
+    if(impKind==='avion'){
+      ['date','type','immat','fonction','nature','obs'].forEach(k=>o[k]=String(v[k]??'').trim());
+      o.immat=o.immat.toUpperCase();ALL.forEach(c=>{if(num(v[c]))o[c]=num(v[c])});if(num(v.arr))o.arr=num(v.arr);
+      if(v.visa&&!o.obs)o.obs='Visa';
+      o._dup=known.has(dupKeyA(o));
+    }else{
+      ['date','heure','lieu','appareil','ident','cat','mission','obs'].forEach(k=>o[k]=String(v[k]??'').trim());
+      o.nbv=num(v.nbv)||1;o.duree=num(v.duree);o._dup=known.has(dupKeyD(o));
+    }
+    o._doute=!!v.doute||!/^\d{4}-\d{2}-\d{2}$/.test(o.date);
+    o._on=!o._dup&&/^\d{4}-\d{2}-\d{2}$/.test(o.date);
+    return o;
+  });
+  let check='';
+  if(impKind==='avion'&&r&&r.totaux&&vols.length){
+    const pg=sumCols(vols),rep=r.reports||{};
+    const diff=[...ALL,'arr'].filter(c=>{const t=num(r.totaux[c]);return t&&t-num(rep[c])!==pg[c]});
+    check=diff.length?`<span class="warn">Écart avec « Totaux à reporter » sur : ${diff.map(c=>LBL[c]||'Arrivées IFR').join(', ')}. Vérifiez ces lignes.</span>`:'<span class="ok">Les temps additionnés correspondent aux totaux écrits sur la page.</span>';
+  }
+  return {name,vols,check,annee:r&&r.annee};
+}
+function renderReview(){
+  $('#imp-review').innerHTML=impResults.map((p,pi)=>{
+    if(p.error)return`<h3>${esc(p.name)}</h3><p class="warn">${esc(p.error)}</p>`;
+    const head=impKind==='avion'?'<th></th><th>Date</th><th>Aéronef</th><th>Fct</th><th>Nature</th><th>Pilote</th><th>Obs.</th>':'<th></th><th>Date</th><th>Heure</th><th>Lieu</th><th>Appareil</th><th>Temps</th>';
+    const rows=p.vols.map((f,i)=>`<tr><td><input type="checkbox" data-p="${pi}" data-i="${i}" ${f._on?'checked':''} aria-label="Ajouter ce vol"></td>`+
+      (impKind==='avion'?`<td>${dmy(f.date)||esc(f.date)}</td><td>${esc(f.type)} ${esc(f.immat)}</td><td>${esc(f.fonction)}</td><td>${esc(f.nature)}</td><td>${fmt(pilotMin(f))}</td><td>${esc(f.obs)}</td>`
+      :`<td>${dmy(f.date)||esc(f.date)}</td><td>${esc(f.heure)}</td><td>${esc(f.lieu)}</td><td>${esc(f.appareil)}</td><td>${fmt(f.duree)}</td>`)+
+      `<td>${f._dup?'<span class="warn">déjà présent</span>':f._doute?'<span class="warn">à vérifier</span>':''}</td></tr>`).join('');
+    return `<h3>${esc(p.name)} : ${p.vols.length} vol${p.vols.length>1?'s':''}${p.annee?` (année ${esc(p.annee)})`:''}</h3>${p.check?`<p style="margin:4px 0 6px;font-size:13px">${p.check}</p>`:''}<div class="scroll"><table><tr>${head}<th></th></tr>${rows}</table></div>`;
+  }).join('');
+  $('#imp-review').querySelectorAll('input[type=checkbox]').forEach(c=>c.onchange=()=>{impResults[c.dataset.p].vols[c.dataset.i]._on=c.checked;countAdd()});
+  countAdd();
+}
+function countAdd(){const n=impResults.reduce((a,p)=>a+(p.vols||[]).filter(f=>f._on).length,0);$('#imp-add').hidden=!n;$('#imp-add').textContent=`Ajouter ${n} vol${n>1?'s':''}`}
+$('#imp-add').onclick=()=>{
+  const add=[];impResults.forEach(p=>(p.vols||[]).forEach(f=>{if(f._on){const o={...f};delete o._on;delete o._dup;delete o._doute;add.push(o)}}));
+  if(!add.length)return;
+  S[impKind].push(...add);sortList(S[impKind]);
+  writeYears(impKind,add.map(yearOf));
+  if(impKind==='avion'){S.spread=Math.floor(S.avion.findIndex(x=>x.id===add[0].id)/LINES);renderAvion()}else{S.dpage=Math.floor(S.drone.findIndex(x=>x.id===add[0].id)/DLINES);renderDrone()}
+  $('#d-import').close();toast(`${add.length} vol${add.length>1?'s':''} ajouté${add.length>1?'s':''}`);
+};
+
+/* ---------- Sauvegarde, exports, réglages ---------- */
+const fs=$('#fs');
+$('#open-save').onclick=()=>{Object.keys(DEF_SETTINGS).forEach(k=>fs.elements[k].value=S.settings[k]||'');$('#d-save').showModal()};
+$('#s-save').onclick=()=>{
+  Object.keys(DEF_SETTINGS).forEach(k=>S.settings[k]=fs.elements[k].value.trim());saveLocal();renderDrone();
+  if(S.mode==='sync')queue(()=>BASE.set({settings:S.settings},{merge:true}));
+  toast('Réglages enregistrés');
+};
+async function save(filename,data){
+  const types={json:'application/json',csv:'text/csv',html:'text/html',xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'};
+  const blob=data instanceof Blob?data:new Blob([data],{type:types[filename.split('.').pop()]||'application/octet-stream'});
+  try{
+    const file=new File([blob],filename,{type:blob.type});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:filename});return}
+  }catch(e){if(e.name==='AbortError')return}
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;document.body.append(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},4000);
+}
+const stamp=()=>new Date().toISOString().slice(0,10);
+function printDoc(title,body){
+  return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)}</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600&family=Kalam&display=swap" rel="stylesheet">
+<style>:root{--paper:#fff;--print:#3d3960;--rule:#8d89a8;--ink:#1c3b98}body{margin:16px;font-family:"Barlow Condensed",Arial,sans-serif;color:#3d3960;background:#fff}
+h1{font-size:18px;margin:0 0 12px}.spread{margin:0 0 24px!important}.pg{box-shadow:none!important;border:1px solid #ccc}
+${$('#paper-css').textContent}
+@page{size:A4 landscape;margin:8mm}@media print{body{margin:0}h1{display:none}.spread{zoom:.72;break-after:page;page-break-after:always}}</style></head><body>${body}</body></html>`;
+}
+$('#x-av-html').onclick=()=>{
+  const F=S.avion,n=Math.max(1,Math.ceil(F.length/LINES));let b=`<h1>Carnet de vol : ${esc(S.settings.nom)}${S.settings.licence?' ('+esc(S.settings.licence)+')':''}, édité le ${dmy(stamp())}</h1>`;
+  for(let k=0;k<n;k++)b+=spreadHTML(F,k,false);
+  save(`carnet-de-vol-avion-${stamp()}.html`,printDoc('Carnet de vol avion',b));
+};
+$('#x-dr-html').onclick=()=>{
+  const F=S.drone,n=Math.max(1,Math.ceil(F.length/DLINES));let b=`<h1>Registre des vols UAS, édité le ${dmy(stamp())}</h1>`;
+  for(let k=0;k<n;k++)b+=registreHTML(F,k,false);
+  save(`registre-vols-drone-${stamp()}.html`,printDoc('Registre des vols drone',b));
+};
+const csvCell=v=>{v=String(v??'');return /[;"\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
+$('#x-av-csv').onclick=()=>{
+  const cols=['date','type','immat','fonction','nature',...ALL,'arr','att','obs'];
+  const lines=[['Date','Type','Immatriculation','Fonction','Nature',...ALL.map(c=>LBL[c]),'Arrivées IFR','Atterrissages','Observations'].join(';')];
+  S.avion.filter(f=>!f.blank).forEach(f=>lines.push(cols.map(c=>csvCell(ALL.includes(c)?fmt(f[c]):(c==='arr'||c==='att')?(num(f[c])||''):f[c])).join(';')));
+  save(`carnet-avion-${stamp()}.csv`,'\ufeff'+lines.join('\n'));
+};
+$('#x-dr-csv').onclick=()=>{
+  const cols=['date','heure','lieu','appareil','ident','cat','mission','nbv','duree','obs'];
+  const lines=[['Date','Heure','Lieu','Appareil','Identifiant','Catégorie','Mission','Vols','Temps','Observations'].join(';')];
+  S.drone.forEach(f=>lines.push(cols.map(c=>csvCell(c==='duree'?fmt(f.duree):f[c])).join(';')));
+  save(`registre-drone-${stamp()}.csv`,'\ufeff'+lines.join('\n'));
+};
+$('#x-xlsx').onclick=e=>exportXlsx(e.currentTarget);$('#st-xlsx').onclick=e=>exportXlsx(e.currentTarget,S.statsOf);
+['avion','drone'].forEach(k=>$('#st-'+k).onclick=()=>{S.statsOf=k;renderStats()});
+$('#x-json').onclick=()=>save(`carnets-de-vol-sauvegarde-${stamp()}.json`,JSON.stringify({format:'carnets-de-vol',version:1,date:new Date().toISOString(),avion:S.avion,drone:S.drone,settings:S.settings},null,1));
+$('#r-file').onchange=async e=>{
+  const file=e.target.files[0];if(!file)return;
+  try{
+    const d=JSON.parse(await file.text());if(d.format!=='carnets-de-vol')throw new Error();
+    let n=0;
+    for(const kind of ['avion','drone']){
+      const ids=new Set(S[kind].map(f=>f.id));const add=(d[kind]||[]).filter(f=>f&&f.id&&!ids.has(f.id));
+      if(add.length){S[kind].push(...add);sortList(S[kind]);writeYears(kind,add.map(yearOf));n+=add.length}
+    }
+    render();toast(n?`${n} vols restaurés`:'Aucun nouveau vol dans cette sauvegarde');
+  }catch(err){toast("Ce fichier n'est pas une sauvegarde de Carnets de vol")}
+  e.target.value='';
+};
+
+init();
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>
